@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { mockUserData, mockTransactionsData, mockGeographyData, mockPerformanceData, mockAdminsData, mockStaffData } from "../data/mockData";
+import { mockUserData, mockTransactionsData, mockGeographyData, mockPerformanceData, mockAdminsData } from "../data/mockData";
 
 // Endpoints that are backed by real database data. They must surface errors
 // instead of silently falling back to mock data.
@@ -10,6 +10,7 @@ const REAL_GET_ENDPOINTS = new Set([
   "client/customers",
   "client/products",
   "management/admins",
+  "staff",
 ]);
 
 const getEndpoint = (args) => (typeof args === "string" ? args : args.url);
@@ -69,9 +70,6 @@ const getMockData = (args) => {
     return { data: mockPerformanceData };
   } else if (endpoint === 'management/admins') {
     return { data: mockAdminsData };
-  } else if (endpoint === 'staff') {
-    // Match backend response shape for staff list
-    return { data: { staff: mockStaffData.staff, total: mockStaffData.total } };
   } else if (endpoint && endpoint.startsWith('general/user/')) {
     return { data: mockUserData };
   } else {
@@ -186,6 +184,21 @@ export const api = createApi({
       query: () => "staff/stats",
       providesTags: ["Staff"],
     }),
+    lookupStaffAccess: build.mutation({
+      query: ({ staffId, name }) => ({
+        url: "staff/lookup",
+        method: "POST",
+        body: { staffId, name },
+      }),
+    }),
+    updateStaffAccess: build.mutation({
+      query: ({ id, access }) => ({
+        url: `staff/${id}/access`,
+        method: "PUT",
+        body: { access },
+      }),
+      invalidatesTags: ["Staff"],
+    }),
     getUserPerformance: build.query({
       query: (id) => `management/performance/${id}`,
       providesTags: ["Performance"],
@@ -214,6 +227,8 @@ export const {
   useUpdateStaffMutation,
   useDeleteStaffMutation,
   useGetStaffStatsQuery,
+  useLookupStaffAccessMutation,
+  useUpdateStaffAccessMutation,
   useGetUserPerformanceQuery,
   useGetDashboardQuery,
 } = api;

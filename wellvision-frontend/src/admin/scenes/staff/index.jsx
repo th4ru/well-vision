@@ -90,8 +90,8 @@ const Staff = () => {
     pageSize,
   });
 
-  // The staff directory is currently served from the local dataset, so search
-  // is applied client-side instead of relying on the (unavailable) server query.
+  // Search is applied client-side so results filter instantly across the
+  // whole staff directory as the admin types.
   const staffRows = useMemo(() => {
     const rows = Array.isArray(data?.staff) ? data.staff : [];
     const term = search.trim().toLowerCase();

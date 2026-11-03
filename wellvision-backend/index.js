@@ -17,6 +17,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import { seedStaff } from './utils/seedStaff.js';
 
 // Load .env colocated with this file, regardless of process.cwd()
 const __filename = fileURLToPath(import.meta.url);
@@ -62,8 +63,16 @@ app.use((err, req, res, next) => {
 // Connect to MongoDB and start the server
 const mongoUri = (process.env.MONGODB_URI || '').toString().trim().replace(/^['"]|['"]$/g, '');
 
-mongoose.connect(mongoUri).then(() => {
+mongoose.connect(mongoUri).then(async () => {
   console.log('✅ MongoDB Connected');
+  // Seed the original staff directory once so the Staff and Configuration
+  // pages have records to work with.
+  try {
+    await seedStaff();
+  } catch (error) {
+    console.error('Staff seed failed:', error.message);
+  }
+
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
   });

@@ -31,6 +31,7 @@ import Breakdown from './admin/scenes/breakdown';
 import Admin from './admin/scenes/admin';
 import Staff from './admin/scenes/staff';
 import Performance from './admin/scenes/performance';
+import Configuration from './admin/scenes/configuration';
 
 export default function DashboardRoutes() {
   const { user } = useContext(AuthContext); // Get logged-in user
@@ -59,6 +60,7 @@ export default function DashboardRoutes() {
           <Route path="admin" element={<Admin />} />
           <Route path="staff" element={<Staff />} />
           <Route path="performance" element={<Performance />} />
+          <Route path="configuration" element={<Configuration />} />
 
           <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
         </Route>

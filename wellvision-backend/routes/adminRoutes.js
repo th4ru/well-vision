@@ -13,6 +13,15 @@ import {
   getDashboard,
   getSales,
 } from '../controllers/dashboardController.js';
+import {
+  createStaff,
+  deleteStaff,
+  getStaff,
+  getStaffById,
+  lookupStaffAccess,
+  updateStaff,
+  updateStaffAccess,
+} from '../controllers/staffController.js';
 
 const router = express.Router();
 
@@ -46,6 +55,21 @@ router.get('/sales/sales', userAuth, adminOnly, getSales);
 router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
 router.get('/client/products', userAuth, adminOnly, getAdminProducts);
 router.post('/client/products', userAuth, adminOnly, createAdminProduct);
+
+/*
+|--------------------------------------------------------------------------
+| Staff directory + access configuration
+|--------------------------------------------------------------------------
+| The Staff page and the Configuration page both use these endpoints. Every
+| route is restricted to admins.
+*/
+router.get('/staff', userAuth, adminOnly, getStaff);
+router.post('/staff/lookup', userAuth, adminOnly, lookupStaffAccess);
+router.post('/staff', userAuth, adminOnly, createStaff);
+router.get('/staff/:id', userAuth, adminOnly, getStaffById);
+router.put('/staff/:id/access', userAuth, adminOnly, updateStaffAccess);
+router.put('/staff/:id', userAuth, adminOnly, updateStaff);
+router.delete('/staff/:id', userAuth, adminOnly, deleteStaff);
 
 /*
 |--------------------------------------------------------------------------
