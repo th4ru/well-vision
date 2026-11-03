@@ -1,0 +1,83 @@
+/* Root variables for easy theming */
+:root {
+  --primary-color: #61dafb;
+  --background-color: #282c34;
+  --text-color: #ffffff;
+  --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Base app container */
+.App {
+  text-align: center;
+  font-family: var(--font-family);
+  background-color: var(--background-color);
+  min-height: 100vh;
+  color: var(--text-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+/* Logo styling with animation */
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+  margin-bottom: 2rem;
+  animation: App-logo-spin infinite 20s linear;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .App-logo {
+    animation: none;
+  }
+}
+
+/* Header section */
+.App-header {
+  font-size: calc(12px + 2vmin);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Link styles */
+.App-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.App-link:hover,
+.App-link:focus {
+  color: #21a1f1;
+  outline: none;
+}
+
+/* Animation keyframes */
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive tweaks */
+@media (max-width: 600px) {
+  .App {
+    padding: 1rem;
+  }
+
+  .App-logo {
+    height: 30vmin;
+  }
+
+  .App-header {
+    font-size: calc(10px + 2vmin);
+  }
+}

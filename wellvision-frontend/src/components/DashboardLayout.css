@@ -1,0 +1,17 @@
+/* DashboardLayout.css */
+
+.dashboard-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+
+.dashboard-layout > .main-content {
+  margin-left: 280px; /* Same as sidebar width */
+  flex-grow: 1;
+  overflow-y: auto;
+  height: 100vh;
+  padding: 0;
+  background-color: #f4f4f4;
+}

@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "baseUrl": "src",
+    "paths": {
+      "state/*": ["admin/state/*"],
+      "components/*": ["admin/components/*"],
+      "scenes/*": ["admin/scenes/*"]
+    }
+  },
+  "include": ["src"]
+}

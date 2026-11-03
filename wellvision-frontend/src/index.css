@@ -1,0 +1,36 @@
+/* Add a global box-sizing for easier sizing calculations */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Optional: set a comfortable base font size and line height */
+body {
+  font-size: 16px;
+  line-height: 1.5;
+  background-color: #fff; /* or your app’s background */
+  color: #222; /* sensible default text color */
+}
+
+/* Make sure images and media are responsive */
+img, picture, video, canvas, svg {
+  max-width: 100%;
+  display: block;
+}
+
+/* Optional: improve link appearance */
+a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+a:hover,
+a:focus {
+  text-decoration: underline;
+}
+
+/* Optional: set some base styles for headings */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
