@@ -5,6 +5,11 @@ import bcrypt from 'bcryptjs';
 import userModel from '../models/userModel.js';
 import userAuth from '../middleware/userAuth.js';
 import adminOnly from '../middleware/adminOnly.js';
+import {
+  getAdminCustomers,
+  getDashboard,
+  getSales,
+} from '../controllers/dashboardController.js';
 
 const router = express.Router();
 
@@ -25,6 +30,16 @@ const toAdminResponse = (user) => ({
 const adminFilter = {
   $or: [{ role: { $regex: '^admin$', $options: 'i' } }, { email: 'admin@example.com' }],
 };
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard / sales data
+|--------------------------------------------------------------------------
+| These endpoints feed the admin dashboard and the daily/monthly sales pages.
+*/
+router.get('/general/dashboard', userAuth, adminOnly, getDashboard);
+router.get('/sales/sales', userAuth, adminOnly, getSales);
+router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
 
 /*
 |--------------------------------------------------------------------------

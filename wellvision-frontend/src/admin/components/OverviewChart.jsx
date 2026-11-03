@@ -3,7 +3,7 @@ import { ResponsiveLine } from "@nivo/line";
 import { useTheme } from "@mui/material";
 import { useGetSalesQuery } from "../state/api";
 
-const OverviewChart = ({ isDashboard = false, view }) => {
+const OverviewChart = ({ isDashboard = false, view, cumulative = true }) => {
   const theme = useTheme();
   const { data, isLoading } = useGetSalesQuery();
 
@@ -23,34 +23,33 @@ const OverviewChart = ({ isDashboard = false, view }) => {
     };
 
     try {
-      Object.values(monthlyData).reduce(
-        (acc, item) => {
-          if (!item || typeof item !== 'object' || !item.month) return acc;
-
-          const { month, totalSales, totalUnits } = item;
-          const curSales = acc.sales + (totalSales || 0);
-          const curUnits = acc.units + (totalUnits || 0);
-
-          totalSalesLine.data = [
-            ...totalSalesLine.data,
-            { x: month, y: curSales },
-          ];
-          totalUnitsLine.data = [
-            ...totalUnitsLine.data,
-            { x: month, y: curUnits },
-          ];
-
-          return { sales: curSales, units: curUnits };
-        },
-        { sales: 0, units: 0 }
+      const months = Object.values(monthlyData).filter(
+        (item) => item && typeof item === 'object' && item.month
       );
+
+      if (cumulative) {
+        let sales = 0;
+        let units = 0;
+
+        months.forEach(({ month, totalSales, totalUnits }) => {
+          sales += totalSales || 0;
+          units += totalUnits || 0;
+          totalSalesLine.data.push({ x: month, y: sales });
+          totalUnitsLine.data.push({ x: month, y: units });
+        });
+      } else {
+        months.forEach(({ month, totalSales, totalUnits }) => {
+          totalSalesLine.data.push({ x: month, y: totalSales || 0 });
+          totalUnitsLine.data.push({ x: month, y: totalUnits || 0 });
+        });
+      }
     } catch (error) {
       console.error("Error processing chart data:", error);
       return [[], []];
     }
 
     return [[totalSalesLine], [totalUnitsLine]];
-  }, [data, theme.palette.secondary]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, theme.palette.secondary, cumulative]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!data || isLoading) return "Loading...";
 
@@ -125,7 +124,7 @@ const OverviewChart = ({ isDashboard = false, view }) => {
         tickRotation: 0,
         legend: isDashboard
           ? ""
-          : `Total ${view === "sales" ? "Revenue" : "Units"} for Year`,
+          : `${cumulative ? "Total" : "Monthly"} ${view === "sales" ? "Revenue" : "Units"} for Year`,
         legendOffset: -60,
         legendPosition: "middle",
       }}

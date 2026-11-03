@@ -50,6 +50,13 @@ const Dashboard = () => {
   const safeData = data || {};
   const safeTransactions = Array.isArray(safeData.transactions) ? safeData.transactions : [];
 
+  const formatNumber = (value) => Number(value || 0).toLocaleString();
+  const formatCurrency = (value) => `Rs. ${Number(value || 0).toLocaleString()}`;
+  const formatChange = (value) => {
+    const numeric = Number(value || 0);
+    return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
+  };
+
   const columns = [
     {
       field: "_id",
@@ -58,12 +65,12 @@ const Dashboard = () => {
     },
     {
       field: "userId",
-      headerName: "User ID",
+      headerName: "Customer",
       flex: 1,
     },
     {
       field: "createdAt",
-      headerName: "CreatedAt",
+      headerName: "Date",
       flex: 1,
     },
     {
@@ -75,9 +82,10 @@ const Dashboard = () => {
     },
     {
       field: "cost",
-      headerName: "Cost",
+      headerName: "Amount",
       flex: 1,
-      renderCell: (params) => `$${Number(params.value || 0).toFixed(2)}`,
+      renderCell: (params) =>
+        `Rs. ${Number(params.value || 0).toLocaleString()}`,
     },
   ];
 
@@ -115,9 +123,9 @@ const Dashboard = () => {
         {/* ROW 1 */}
         <StatBox
           title="Total Customers"
-          value={data?.totalCustomers || 0}
-          increase="+14%"
-          description="Since last month"
+          value={formatNumber(data?.totalCustomers)}
+          increase={formatChange(data?.customerChange)}
+          description="vs last month"
           icon={
             <Email
               sx={{ color: theme.palette.secondary[300], fontSize: "26px" }}
@@ -126,9 +134,9 @@ const Dashboard = () => {
         />
         <StatBox
           title="Sales Today"
-          value={data?.todayStats?.totalSales || 0}
-          increase="+21%"
-          description="Since last month"
+          value={formatCurrency(data?.todayStats?.totalSales)}
+          increase={formatChange(data?.todayStats?.change)}
+          description="vs yesterday"
           icon={
             <PointOfSale
               sx={{ color: theme.palette.secondary[300], fontSize: "26px" }}
@@ -141,14 +149,21 @@ const Dashboard = () => {
           backgroundColor={theme.palette.background.alt}
           p="1rem"
           borderRadius="0.55rem"
+          display="flex"
+          flexDirection="column"
         >
-          <OverviewChart view="sales" isDashboard={true} />
+          <Typography variant="h6" sx={{ color: theme.palette.secondary[100] }}>
+            Monthly Sales
+          </Typography>
+          <Box flexGrow={1} minHeight={0}>
+            <OverviewChart view="sales" isDashboard cumulative={false} />
+          </Box>
         </Box>
         <StatBox
           title="Monthly Sales"
-          value={data?.thisMonthStats?.totalSales || 0}
-          increase="+5%"
-          description="Since last month"
+          value={formatCurrency(data?.thisMonthStats?.totalSales)}
+          increase={formatChange(data?.thisMonthStats?.change)}
+          description="vs last month"
           icon={
             <PersonAdd
               sx={{ color: theme.palette.secondary[300], fontSize: "26px" }}
@@ -157,9 +172,9 @@ const Dashboard = () => {
         />
         <StatBox
           title="Yearly Sales"
-          value={data?.yearlySalesTotal || 0}
-          increase="+43%"
-          description="Since last month"
+          value={formatCurrency(data?.yearlySalesTotal)}
+          increase={formatChange(data?.yearlyChange)}
+          description="vs last year"
           icon={
             <Traffic
               sx={{ color: theme.palette.secondary[300], fontSize: "26px" }}

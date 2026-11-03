@@ -4,10 +4,18 @@ import { useGetCustomersQuery } from "../../state/api";
 import Header from "../../components/Header";
 import { DataGrid } from "@mui/x-data-grid";
 
+const fullName = (row) =>
+  `${row.givenName || ""} ${row.familyName || ""}`.trim() || "N/A";
+
 const Customers = () => {
   const theme = useTheme();
   const { data, isLoading, error } = useGetCustomersQuery();
-  console.log("customers data", data);
+
+  const rows = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.customers)
+    ? data.customers
+    : [];
 
   const columns = [
     {
@@ -18,7 +26,8 @@ const Customers = () => {
     {
       field: "name",
       headerName: "Name",
-      flex: 0.5,
+      flex: 0.7,
+      valueGetter: (params) => fullName(params.row),
     },
     {
       field: "email",
@@ -26,32 +35,25 @@ const Customers = () => {
       flex: 1,
     },
     {
-      field: "phoneNumber",
+      field: "phoneNo",
       headerName: "Phone Number",
-      flex: 0.5,
-      renderCell: (params) => {
-        if (!params.value) return "N/A";
-        const phoneStr = params.value.toString();
-        if (phoneStr.length === 10) {
-          return phoneStr.replace(/^(\d{3})(\d{3})(\d{4})/, "($1)$2-$3");
-        }
-        return phoneStr;
-      },
+      flex: 0.6,
     },
     {
-      field: "country",
-      headerName: "Country",
-      flex: 0.4,
+      field: "ageYears",
+      headerName: "Age",
+      flex: 0.3,
+      type: "number",
     },
     {
-      field: "occupation",
-      headerName: "Occupation",
+      field: "address",
+      headerName: "Address",
       flex: 1,
     },
     {
-      field: "role",
-      headerName: "Role",
-      flex: 0.5,
+      field: "nicPassport",
+      headerName: "NIC / Passport",
+      flex: 0.6,
     },
   ];
 
@@ -71,13 +73,13 @@ const Customers = () => {
       <Box m="1.5rem 2.5rem">
         <Header title="CUSTOMERS" subtitle="List of Customers" />
         <Typography variant="h6" color="error" sx={{ mt: "20px" }}>
-          Error loading customers: {error.message || 'Unknown error'}
+          Error loading customers: {error?.data?.message || error.message || 'Unknown error'}
         </Typography>
       </Box>
     );
   }
 
-  if (!data || !Array.isArray(data) || data.length === 0) {
+  if (rows.length === 0) {
     return (
       <Box m="1.5rem 2.5rem">
         <Header title="CUSTOMERS" subtitle="List of Customers" />
@@ -90,7 +92,10 @@ const Customers = () => {
 
   return (
     <Box m="1.5rem 2.5rem">
-      <Header title="CUSTOMERS" subtitle="List of Customers" />
+      <Header
+        title="CUSTOMERS"
+        subtitle={`List of Customers (${rows.length})`}
+      />
       <Box
         mt="40px"
         height="75vh"
@@ -122,7 +127,7 @@ const Customers = () => {
         <DataGrid
           loading={false}
           getRowId={(row) => row._id}
-          rows={data}
+          rows={rows}
           columns={columns}
         />
       </Box>

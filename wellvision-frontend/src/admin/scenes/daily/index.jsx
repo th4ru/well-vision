@@ -6,65 +6,28 @@ import { useGetSalesQuery } from "../../state/api";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+const now = new Date();
+const CURRENT_MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1);
+const CURRENT_MONTH_END = new Date(
+  now.getFullYear(),
+  now.getMonth() + 1,
+  0,
+  23,
+  59,
+  59,
+  999
+);
+
 const Daily = () => {
-  const [startDate, setStartDate] = useState(new Date("2021-02-01"));
-  const [endDate, setEndDate] = useState(new Date("2021-03-01"));
+  const [startDate, setStartDate] = useState(CURRENT_MONTH_START);
+  const [endDate, setEndDate] = useState(CURRENT_MONTH_END);
   const [view, setView] = useState("sales");
   const { data, isLoading, isError } = useGetSalesQuery();
   const theme = useTheme();
 
   const formattedData = useMemo(() => {
-    // Build safe sample fallback when no data
     if (!data || !data.dailyData || typeof data.dailyData !== 'object') {
-      const sampleSalesLine = {
-        id: "totalSales",
-        color: theme.palette.secondary.main,
-        data: [
-          { x: "09-01", y: 120 },
-          { x: "09-02", y: 150 },
-          { x: "09-03", y: 180 },
-          { x: "09-04", y: 200 },
-          { x: "09-05", y: 220 },
-          { x: "09-06", y: 190 },
-          { x: "09-07", y: 210 },
-          { x: "09-08", y: 230 },
-          { x: "09-09", y: 250 },
-          { x: "09-10", y: 270 },
-          { x: "09-11", y: 240 },
-          { x: "09-12", y: 260 },
-          { x: "09-13", y: 280 },
-          { x: "09-14", y: 300 },
-          { x: "09-15", y: 320 },
-          { x: "09-16", y: 290 },
-          { x: "09-17", y: 310 },
-          { x: "09-18", y: 330 },
-        ],
-      };
-      const sampleUnitsLine = {
-        id: "totalUnits",
-        color: theme.palette.secondary[600],
-        data: [
-          { x: "09-01", y: 60 },
-          { x: "09-02", y: 75 },
-          { x: "09-03", y: 90 },
-          { x: "09-04", y: 100 },
-          { x: "09-05", y: 110 },
-          { x: "09-06", y: 95 },
-          { x: "09-07", y: 105 },
-          { x: "09-08", y: 115 },
-          { x: "09-09", y: 125 },
-          { x: "09-10", y: 135 },
-          { x: "09-11", y: 120 },
-          { x: "09-12", y: 130 },
-          { x: "09-13", y: 140 },
-          { x: "09-14", y: 150 },
-          { x: "09-15", y: 160 },
-          { x: "09-16", y: 145 },
-          { x: "09-17", y: 155 },
-          { x: "09-18", y: 165 },
-        ],
-      };
-      return view === "sales" ? [sampleSalesLine] : [sampleUnitsLine];
+      return [];
     }
 
     const { dailyData } = data;

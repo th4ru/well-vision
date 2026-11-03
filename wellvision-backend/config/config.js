@@ -21,8 +21,10 @@ const config = {
   // Cookie Options
   cookieOptions: {
     httpOnly: true,
-    secure: false, // Allow on localhost (HTTP)
-    sameSite: 'none', // Allow cross-origin for localhost:3000 to localhost:4000
+    secure: process.env.NODE_ENV === 'production',
+    // SameSite=None requires Secure, which browsers reject on plain HTTP.
+    // localhost:3000 -> localhost:4000 is same-site, so lax works in development.
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   }
 };
