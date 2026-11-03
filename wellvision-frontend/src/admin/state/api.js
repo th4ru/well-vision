@@ -1,12 +1,14 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { mockUserData, mockProductsData, mockTransactionsData, mockGeographyData, mockPerformanceData, mockAdminsData, mockStaffData } from "../data/mockData";
+import { mockUserData, mockTransactionsData, mockGeographyData, mockPerformanceData, mockAdminsData, mockStaffData } from "../data/mockData";
 
 // Endpoints that are backed by real database data. They must surface errors
 // instead of silently falling back to mock data.
 const REAL_GET_ENDPOINTS = new Set([
   "general/dashboard",
+  "general/me",
   "sales/sales",
   "client/customers",
+  "client/products",
   "management/admins",
 ]);
 
@@ -59,9 +61,7 @@ const baseQueryWithFallback = async (args, api, extraOptions) => {
 const getMockData = (args) => {
   const endpoint = getEndpoint(args);
 
-  if (endpoint === 'client/products') {
-    return { data: mockProductsData };
-  } else if (endpoint === 'client/geography') {
+  if (endpoint === 'client/geography') {
     return { data: mockGeographyData };
   } else if (endpoint === 'client/transactions') {
     return { data: mockTransactionsData };
@@ -99,9 +99,21 @@ export const api = createApi({
       query: (id) => `general/user/${id}`,
       providesTags: ["User"],
     }),
+    getMe: build.query({
+      query: () => "general/me",
+      providesTags: ["User"],
+    }),
     getProducts: build.query({
       query: () => "client/products",
       providesTags: ["Products"],
+    }),
+    addProduct: build.mutation({
+      query: (productData) => ({
+        url: "client/products",
+        method: "POST",
+        body: productData,
+      }),
+      invalidatesTags: ["Products"],
     }),
     getCustomers: build.query({
       query: () => "client/customers",
@@ -187,7 +199,9 @@ export const api = createApi({
 
 export const {
   useGetUserQuery,
+  useGetMeQuery,
   useGetProductsQuery,
+  useAddProductMutation,
   useGetCustomersQuery,
   useGetTransactionsQuery,
   useGetGeographyQuery,

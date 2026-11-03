@@ -6,7 +6,10 @@ import userModel from '../models/userModel.js';
 import userAuth from '../middleware/userAuth.js';
 import adminOnly from '../middleware/adminOnly.js';
 import {
+  createAdminProduct,
   getAdminCustomers,
+  getAdminProducts,
+  getCurrentUser,
   getDashboard,
   getSales,
 } from '../controllers/dashboardController.js';
@@ -33,13 +36,16 @@ const adminFilter = {
 
 /*
 |--------------------------------------------------------------------------
-| Dashboard / sales data
+| Dashboard / sales / products data
 |--------------------------------------------------------------------------
-| These endpoints feed the admin dashboard and the daily/monthly sales pages.
+| These endpoints feed the admin dashboard and the client-facing admin pages.
 */
 router.get('/general/dashboard', userAuth, adminOnly, getDashboard);
+router.get('/general/me', userAuth, getCurrentUser);
 router.get('/sales/sales', userAuth, adminOnly, getSales);
 router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
+router.get('/client/products', userAuth, adminOnly, getAdminProducts);
+router.post('/client/products', userAuth, adminOnly, createAdminProduct);
 
 /*
 |--------------------------------------------------------------------------

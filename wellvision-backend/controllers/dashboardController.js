@@ -5,6 +5,8 @@
 // customer page.
 import Customer from '../models/customer.js';
 import InvoiceModel from '../models/invoiceModel.js';
+import Product from '../models/productModel.js';
+import userModel from '../models/userModel.js';
 
 const MONTHS = [
   'January',
@@ -232,6 +234,162 @@ export const getAdminCustomers = async (req, res) => {
     return res.json(customers);
   } catch (error) {
     console.error('GET /client/customers error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Products
+|--------------------------------------------------------------------------
+| The admin products page uses the same Product collection as the rest of the
+| application. Only admins can reach these routes (see adminRoutes.js).
+*/
+
+const PRODUCT_CATEGORIES = [
+  'eyeglasses',
+  'sunglasses',
+  'contact-lenses',
+  'lens',
+  'accessories',
+];
+
+// Shape consumed by the admin product cards.
+const toProductResponse = (product) => ({
+  _id: product._id,
+  sku: product.sku || '',
+  name: product.name,
+  category: product.category,
+  brand: product.brand,
+  model: product.model || '',
+  price: toNumber(product.price),
+  cost: toNumber(product.cost),
+  stock: toNumber(product.stock),
+  reorderLevel: toNumber(product.reorderLevel),
+  description: product.description || '',
+  frameMaterial: product.frameMaterial || '',
+  frameColor: product.frameColor || '',
+  lensType: product.lensType || '',
+  // Fields used by the existing product card layout
+  rating: toNumber(product.averageRating),
+  averageRating: toNumber(product.averageRating),
+  supply: toNumber(product.stock),
+  totalSold: toNumber(product.totalSold),
+  createdAt: product.createdAt,
+});
+
+// GET /api/admin/client/products
+export const getAdminProducts = async (req, res) => {
+  try {
+    const products = await Product.find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.json(products.map(toProductResponse));
+  } catch (error) {
+    console.error('GET /client/products error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// POST /api/admin/client/products
+export const createAdminProduct = async (req, res) => {
+  const name = (req.body.name || '').trim();
+  const brand = (req.body.brand || '').trim();
+  const category = (req.body.category || '').trim();
+  const model = (req.body.model || '').trim();
+  const description = (req.body.description || '').trim();
+  const price = Number(req.body.price);
+  const cost = Number(req.body.cost);
+  const stock = Number(req.body.stock);
+  const reorderLevel = req.body.reorderLevel === '' || req.body.reorderLevel === undefined
+    ? 10
+    : Number(req.body.reorderLevel);
+
+  if (!name || !brand || !category) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name, category and brand are required',
+    });
+  }
+  if (!PRODUCT_CATEGORIES.includes(category)) {
+    return res.status(400).json({
+      success: false,
+      message: `Category must be one of: ${PRODUCT_CATEGORIES.join(', ')}`,
+    });
+  }
+  if (!Number.isFinite(price) || price < 0) {
+    return res.status(400).json({ success: false, message: 'Price must be a number of 0 or more' });
+  }
+  if (!Number.isFinite(cost) || cost < 0) {
+    return res.status(400).json({ success: false, message: 'Cost must be a number of 0 or more' });
+  }
+  if (!Number.isFinite(stock) || stock < 0) {
+    return res.status(400).json({ success: false, message: 'Stock must be a number of 0 or more' });
+  }
+  if (!Number.isFinite(reorderLevel) || reorderLevel < 0) {
+    return res.status(400).json({ success: false, message: 'Reorder level must be a number of 0 or more' });
+  }
+
+  try {
+    const product = await Product.create({
+      name,
+      category,
+      brand,
+      model: model || undefined,
+      description: description || undefined,
+      price,
+      cost,
+      stock,
+      reorderLevel,
+      isActive: true,
+    });
+
+    return res.status(201).json({
+      success: true,
+      product: toProductResponse(product.toObject()),
+      message: 'Product created successfully',
+    });
+  } catch (error) {
+    console.error('POST /client/products error:', error.message);
+
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: 'A product with this SKU already exists' });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// GET /api/admin/general/me
+export const getCurrentUser = async (req, res) => {
+  try {
+    const user = await userModel
+      .findById(req.user.id)
+      .select('name email phone role avatar isAccountVerified createdAt lastLogin');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Keep the same role promotion used by the login controller.
+    const isAdmin = user.email === 'admin@example.com' || /^admin$/i.test(user.role || '');
+
+    return res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      avatar: user.avatar || '',
+      role: isAdmin ? 'Admin' : user.role,
+      isAccountVerified: user.isAccountVerified,
+      createdAt: user.createdAt,
+      lastLogin: user.lastLogin,
+    });
+  } catch (error) {
+    console.error('GET /general/me error:', error.message);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
