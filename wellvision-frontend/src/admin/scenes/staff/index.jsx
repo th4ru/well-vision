@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
   Card,
@@ -57,7 +57,6 @@ const Staff = () => {
   // State for data grid
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
-  const [sort, setSort] = useState({});
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
 
@@ -89,9 +88,29 @@ const Staff = () => {
   const { data, isLoading, refetch } = useGetStaffQuery({
     page,
     pageSize,
-    sort: JSON.stringify(sort),
-    search,
   });
+
+  // The staff directory is currently served from the local dataset, so search
+  // is applied client-side instead of relying on the (unavailable) server query.
+  const staffRows = useMemo(() => {
+    const rows = Array.isArray(data?.staff) ? data.staff : [];
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+
+    return rows.filter((member) =>
+      [
+        member.staffId,
+        member.name,
+        member.email,
+        member.role,
+        member.status,
+        member.department,
+        member.phoneNumber,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term))
+    );
+  }, [data, search]);
 
   const [createStaff] = useCreateStaffMutation();
   const [updateStaff] = useUpdateStaffMutation();
@@ -99,7 +118,7 @@ const Staff = () => {
 
   // Handle search
   const handleSearch = () => {
-    setSearch(searchInput);
+    setSearch(searchInput.trim());
     setPage(0);
   };
 
@@ -305,17 +324,26 @@ const Staff = () => {
         <Box>
           <IconButton
             onClick={() => handleOpenEditModal(params.row)}
-            color="primary"
             size="small"
+            title="Edit staff member"
+            aria-label="Edit staff member"
+            sx={{
+              mr: 0.5,
+              backgroundColor: theme.palette.secondary[300],
+              color: theme.palette.primary[600],
+              "&:hover": { backgroundColor: theme.palette.secondary[400] },
+            }}
           >
-            <Edit />
+            <Edit fontSize="small" />
           </IconButton>
           <IconButton
             onClick={() => handleOpenDeleteModal(params.row)}
             color="error"
             size="small"
+            title="Delete staff member"
+            aria-label="Delete staff member"
           >
-            <Delete />
+            <Delete fontSize="small" />
           </IconButton>
         </Box>
       ),
@@ -340,7 +368,11 @@ const Staff = () => {
             label="Search staff..."
             variant="outlined"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             onKeyPress={handleKeyPress}
             size="small"
             sx={{ minWidth: "300px" }}
@@ -401,18 +433,15 @@ const Staff = () => {
         <DataGrid
           loading={isLoading || !data}
           getRowId={(row) => row._id}
-          rows={(data && data.staff) || []}
+          rows={staffRows}
           columns={columns}
-          rowCount={(data && data.total) || 0}
+          rowCount={staffRows.length}
           rowsPerPageOptions={[20, 50, 100]}
           pagination
           page={page}
           pageSize={pageSize}
-          paginationMode="server"
-          sortingMode="server"
           onPageChange={(newPage) => setPage(newPage)}
           onPageSizeChange={(newPageSize) => setPageSize(newPageSize)}
-          onSortModelChange={(newSortModel) => setSort(...newSortModel)}
         />
       </Box>
 

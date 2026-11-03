@@ -9,7 +9,13 @@ const fullName = (row) =>
 
 const Customers = () => {
   const theme = useTheme();
-  const { data, isLoading, error } = useGetCustomersQuery();
+  // Refetch when the page is opened/focused and poll occasionally so a
+  // customer added by a normal user shows up for the admin without a reload.
+  const { data, isLoading, error } = useGetCustomersQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+    refetchOnFocus: true,
+    pollingInterval: 15000,
+  });
 
   const rows = Array.isArray(data)
     ? data
