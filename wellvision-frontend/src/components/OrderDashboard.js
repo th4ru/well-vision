@@ -11,16 +11,17 @@ import {
   X,
   Eye,
   Package,
-  Minus,
   ShoppingCart
 } from 'lucide-react';
 
 const DEFAULT_ORDER_FORM = {
   orderNumber: '',
+  customerId: '',
   customerName: '',
   customerEmail: '',
   status: 'Order Received',
   items: [],
+  amountGiven: '',
   notes: ''
 };
 
@@ -152,6 +153,21 @@ function Orders() {
     };
 
     fetchOrders();
+
+    // When the Orders tab is opened from a customer profile, start a new
+    // order with that customer's details already filled in.
+    if (location.state?.newOrderForCustomer) {
+      const { customerId, customerName, customerEmail } = location.state.newOrderForCustomer;
+      setOrderForm({
+        ...DEFAULT_ORDER_FORM,
+        customerId: customerId || '',
+        customerName: customerName || '',
+        customerEmail: customerEmail || ''
+      });
+      setShowAddModal(true);
+      window.history.replaceState({}, document.title);
+      return;
+    }
 
     // Check if products were selected from the products page
     if (location.state?.selectedProducts) {
@@ -339,6 +355,15 @@ function Orders() {
   };
 
   // Add order functions
+  // Opening a brand new order from the Orders page always starts from a blank
+  // form. Customer details are only pre-filled when the order is started from a
+  // customer's profile / Job Card.
+  const openAddOrderModal = () => {
+    localStorage.removeItem('orderFormData');
+    setOrderForm({ ...DEFAULT_ORDER_FORM, items: [] });
+    setShowAddModal(true);
+  };
+
   const handleRemoveItem = (index) => {
     setOrderForm({
       ...orderForm,
@@ -372,6 +397,7 @@ function Orders() {
         credentials: 'include',
         body: JSON.stringify({
           ...orderForm,
+          amountGiven: Number(orderForm.amountGiven) || 0,
           total: calculateTotal()
         })
       });
@@ -412,6 +438,9 @@ function Orders() {
   };
 
   const totalOrders = orders.length;
+  const orderTotal = calculateTotal();
+  const amountGivenValue = Number(orderForm.amountGiven) || 0;
+  const paymentBalance = amountGivenValue - orderTotal;
 
   return (
     <div className="orders-page">
@@ -446,7 +475,7 @@ function Orders() {
               </div>
             </div>
             <div className="orders-header-actions">
-              <button className="add-order-btn" onClick={() => setShowAddModal(true)}>
+              <button className="add-order-btn" onClick={openAddOrderModal}>
                 <Plus size={16} />
                 Add Order
               </button>
@@ -797,7 +826,7 @@ function Orders() {
                         type="text"
                         className="form-input"
                         value={orderForm.customerName}
-                        onChange={(e) => setOrderForm({...orderForm, customerName: e.target.value})}
+                        onChange={(e) => setOrderForm({ ...orderForm, customerName: e.target.value, customerId: '' })}
                         placeholder="Enter customer name"
                         required
                       />
@@ -811,7 +840,7 @@ function Orders() {
                         type="email"
                         className="form-input"
                         value={orderForm.customerEmail}
-                        onChange={(e) => setOrderForm({...orderForm, customerEmail: e.target.value})}
+                        onChange={(e) => setOrderForm({ ...orderForm, customerEmail: e.target.value, customerId: '' })}
                         placeholder="Enter customer email"
                       />
                     </div>
@@ -880,7 +909,8 @@ function Orders() {
                                 onClick={() => handleRemoveItem(index)}
                                 title="Remove item"
                               >
-                                <Minus size={14} />
+                                <Trash2 size={16} />
+                                <span>Remove</span>
                               </button>
                             </td>
                           </tr>
@@ -898,6 +928,52 @@ function Orders() {
                     </table>
                   </div>
                 )}
+
+                {/* Payment */}
+                <div className="order-detail-section">
+                  <h4>Payment</h4>
+                  <div className="payment-summary">
+                    <div className="payment-summary-row">
+                      <span>Total Amount</span>
+                      <strong>Rs. {orderTotal.toLocaleString()}</strong>
+                    </div>
+
+                    <div className="payment-input-group">
+                      <label className="form-label" htmlFor="amount-given">
+                        Amount Customer Gives
+                      </label>
+                      <input
+                        id="amount-given"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="form-input"
+                        value={orderForm.amountGiven}
+                        onChange={(e) =>
+                          setOrderForm({ ...orderForm, amountGiven: e.target.value })
+                        }
+                        placeholder="Enter amount received"
+                      />
+                    </div>
+
+                    {amountGivenValue > 0 && (
+                      <div className="payment-summary-row">
+                        <span>
+                          {paymentBalance >= 0 ? 'Change to Return' : 'Balance Due'}
+                        </span>
+                        <strong
+                          className={
+                            paymentBalance >= 0
+                              ? 'payment-change'
+                              : 'payment-balance-due'
+                          }
+                        >
+                          Rs. {Math.abs(paymentBalance).toLocaleString()}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* Update Status */}
                 <div className="order-detail-section">

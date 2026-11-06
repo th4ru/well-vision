@@ -249,7 +249,7 @@ WellVision Optical Team
 // ---------------------------------------------------------------------------
 export const createOrder = async (req, res) => {
   try {
-    const { orderNumber, customerId, customerName, customerEmail, items = [], status = 'Order Received', total = 0 } = req.body;
+    const { orderNumber, customerId, customerName, customerEmail, items = [], status = 'Order Received', total = 0, amountGiven = 0 } = req.body;
 
     if (!customerName) {
       return res.status(400).json({ success: false, message: 'customerName is required' });
@@ -338,7 +338,8 @@ export const createOrder = async (req, res) => {
         customerEmail,
         items,
         status,
-        total
+        total,
+        amountGiven: Number(amountGiven) || 0
       }], { session });
 
       // Update product stock

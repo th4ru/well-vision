@@ -21,6 +21,7 @@ const orderSchema = new mongoose.Schema({
   },
   collected: { type: Boolean, default: false },
   total: { type: Number, required: true, default: 0 },
+  amountGiven: { type: Number, default: 0 },
   placedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 

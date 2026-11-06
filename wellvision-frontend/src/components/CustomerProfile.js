@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ChevronRight } from 'lucide-react';
-import WellVisionInvoice from './WellVisionInvoice';
 import './CustomerProfile.css';
 import { toast } from 'react-toastify';
 
@@ -11,8 +10,11 @@ const CustomerProfile = () => {
   const [searchParams] = useSearchParams();
   const [customer, setCustomer] = useState(null);
   const [prescriptions, setPrescriptions] = useState([]);
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'Personal Details');
-  const tabs = ['Personal Details', 'Prescriptions', 'Job Card', 'Billing', 'Bills'];
+  const tabs = ['Personal Details', 'Orders', 'Prescriptions', 'Job Card', 'Bills'];
+  const [activeTab, setActiveTab] = useState(() => {
+    const requestedTab = searchParams.get('tab');
+    return requestedTab && tabs.includes(requestedTab) ? requestedTab : 'Personal Details';
+  });
   const [expandedSections, setExpandedSections] = useState({
     customerDetails: true,
     prescription: true,
@@ -81,7 +83,7 @@ const CustomerProfile = () => {
     fetchCustomer();
   }, [customerId]);
 
-  // Fetch invoices for this customer to show under the Billing tab
+  // Fetch invoices for this customer to show under the Bills tab
   useEffect(() => {
     if (!customerId) return;
 
@@ -196,6 +198,22 @@ const CustomerProfile = () => {
                 key={tab}
                 className={`profile-tab-btn ${activeTab === tab ? 'active' : ''}`}
                 onClick={() => {
+                  if (tab === 'Orders') {
+                    const customerName = `${customer.givenName || ''} ${customer.familyName || ''}`
+                      .trim()
+                      .replace(/\s+/g, ' ');
+                    navigate('/orders', {
+                      state: {
+                        newOrderForCustomer: {
+                          customerId: customer._id,
+                          customerName,
+                          customerEmail: customer.email || '',
+                        },
+                      },
+                    });
+                    return;
+                  }
+
                   setActiveTab(tab);
                   navigate(`/customer/${customerId}?tab=${encodeURIComponent(tab)}`, { replace: true });
                 }}
@@ -435,12 +453,6 @@ const CustomerProfile = () => {
                   })}
                 </div>
               )}
-            </div>
-          )}
-
-          {activeTab === 'Billing' && (
-            <div className="profile-billing-tab">
-              <WellVisionInvoice customer={customer} />
             </div>
           )}
 
