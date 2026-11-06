@@ -97,7 +97,9 @@ export default function SalesDashboard({ onNavigate }) {
     }
   };
 
-  // Group invoices by date and calculate daily totals
+  // Group invoices by date and calculate daily totals.
+  // Sales are counted from the amount the customer actually paid (advance),
+  // not the full bill, so outstanding balances are not treated as revenue.
   const dailySalesData = useMemo(() => {
     const grouped = invoices.reduce((acc, invoice) => {
       const dateKey = new Date(invoice.date).toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -108,7 +110,7 @@ export default function SalesDashboard({ onNavigate }) {
           invoiceCount: 0
         };
       }
-      acc[dateKey].totalAmount += invoice.amount;
+      acc[dateKey].totalAmount += Number(invoice.advance) || 0;
       acc[dateKey].invoiceCount += 1;
       return acc;
     }, {});

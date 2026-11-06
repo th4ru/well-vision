@@ -484,6 +484,122 @@
   }
 }
 
+/* Orders tab */
+.profile-orders-tab {
+  padding: 20px 24px;
+}
+
+.profile-orders-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.profile-orders-header h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.profile-orders-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.profile-create-order-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: #0d9488;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.profile-create-order-btn:hover {
+  background-color: #0f766e;
+}
+
+.profile-orders-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.profile-orders-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.profile-orders-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #495057;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  white-space: nowrap;
+}
+
+.profile-orders-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #333;
+  border-bottom: 1px solid #f1f3f4;
+  vertical-align: middle;
+}
+
+.profile-orders-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.profile-order-number {
+  font-weight: 600;
+  color: #0d9488;
+  white-space: nowrap;
+}
+
+.profile-order-items {
+  max-width: 260px;
+  color: #4b5563;
+}
+
+.profile-order-total {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.profile-order-due {
+  font-weight: 600;
+  color: #b91c1c;
+  white-space: nowrap;
+}
+
+.profile-order-settled {
+  font-weight: 600;
+  color: #047857;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .profile-orders-tab {
+    padding: 16px;
+  }
+}
+
 /* Additional styles for better full-width layout */
 .profile-page {
   width: 100%;

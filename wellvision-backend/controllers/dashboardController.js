@@ -1,8 +1,9 @@
 // controllers/dashboardController.js
 // Real dashboard/sales data for the admin dashboard.
-// Sales are based on invoices (amount billed); units are the number of
-// invoice line items. Customers come from the same collection used by the
-// customer page.
+// Sales are based on the amount actually paid on each invoice (advance), not
+// the full billed amount, so outstanding balances do not count as revenue
+// until the customer pays. Units are the number of invoice line items.
+// Customers come from the same collection used by the customer page.
 import Customer from '../models/customer.js';
 import InvoiceModel from '../models/invoiceModel.js';
 import Product from '../models/productModel.js';
@@ -61,7 +62,7 @@ const buildSalesData = async () => {
       $lt: new Date(currentYear + 1, 0, 1),
     },
   })
-    .select('name amount items date createdAt customerId')
+    .select('name amount advance items date createdAt customerId')
     .sort({ date: -1 })
     .lean();
 
@@ -94,42 +95,44 @@ const buildSalesData = async () => {
     const invoiceDate = getInvoiceDate(invoice);
     if (!invoiceDate) return;
 
-    const amount = toNumber(invoice.amount);
+    // Only the money the customer has actually paid counts towards sales.
+    // The unpaid balance stays a receivable until the bill is settled.
+    const paidAmount = toNumber(invoice.advance);
     const units = Array.isArray(invoice.items) ? invoice.items.length : 0;
     const year = invoiceDate.getFullYear();
 
     if (year === previousYear) {
-      previousYearTotal += amount;
+      previousYearTotal += paidAmount;
     }
 
     if (year === lastMonthYear && invoiceDate.getMonth() === lastMonthIndex) {
-      lastMonthTotal += amount;
+      lastMonthTotal += paidAmount;
     }
 
     if (year !== currentYear) return;
 
     currentYearInvoices.push(invoice);
-    currentYearTotal += amount;
+    currentYearTotal += paidAmount;
 
     const month = monthlyData[MONTHS[invoiceDate.getMonth()]];
-    month.totalSales += amount;
+    month.totalSales += paidAmount;
     month.totalUnits += units;
 
     const key = dateKey(invoiceDate);
     if (!dailyData[key]) {
       dailyData[key] = { date: key, totalSales: 0, totalUnits: 0 };
     }
-    dailyData[key].totalSales += amount;
+    dailyData[key].totalSales += paidAmount;
     dailyData[key].totalUnits += units;
 
     if (key === todayKey) {
-      todayTotal += amount;
+      todayTotal += paidAmount;
     }
     if (key === yesterdayKey) {
-      yesterdayTotal += amount;
+      yesterdayTotal += paidAmount;
     }
     if (invoiceDate.getMonth() === now.getMonth()) {
-      currentMonthTotal += amount;
+      currentMonthTotal += paidAmount;
       currentMonthUnits += units;
     }
   });

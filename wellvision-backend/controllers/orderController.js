@@ -5,6 +5,8 @@ import transporter from '../config/nodemailer.js';
 import Counter from '../models/counterModel.js';
 import Settings from '../models/settingsModel.js';
 import Customer from '../models/customer.js';
+import Invoice from '../models/invoiceModel.js';
+import { createBillForOrder } from '../utils/billing.js';
 
 // Allowed statuses
 const ALLOWED_STATUSES = [
@@ -20,15 +22,16 @@ const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'
 
 // Try to attach an order to a customer record using the email or full name
 // typed into the Add Order form.
-const findCustomerIdForOrder = async (customerName, customerEmail) => {
+const findCustomerForOrder = async (customerName, customerEmail) => {
+  const customerFields = '_id givenName familyName phoneNo address email';
   const email = (customerEmail || '').trim();
   if (email) {
     const byEmail = await Customer.findOne({
       email: { $regex: `^${escapeRegExp(email)}$`, $options: 'i' },
     })
-      .select('_id')
+      .select(customerFields)
       .lean();
-    if (byEmail) return byEmail._id;
+    if (byEmail) return byEmail;
   }
 
   const name = (customerName || '').trim().replace(/\s+/g, ' ');
@@ -40,9 +43,9 @@ const findCustomerIdForOrder = async (customerName, customerEmail) => {
         givenName: { $regex: `^${escapeRegExp(givenName)}$`, $options: 'i' },
         familyName: { $regex: `^${escapeRegExp(familyName)}$`, $options: 'i' },
       })
-        .select('_id')
+        .select(customerFields)
         .lean();
-      if (byName) return byName._id;
+      if (byName) return byName;
     }
   }
 
@@ -150,8 +153,17 @@ export const updateOrderStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }
 
-    const order = await Order.findByIdAndUpdate(id, { status }, { new: true }).lean();
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    const orderDoc = await Order.findById(id);
+    if (!orderDoc) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    orderDoc.status = status;
+    if (status === 'Customer Collected') {
+      orderDoc.collected = true;
+      // Collecting the order settles the outstanding balance.
+      orderDoc.amountGiven = Number(orderDoc.total) || 0;
+    }
+    await orderDoc.save();
+    const order = orderDoc.toObject();
 
     // EMAIL MESSAGE BASED ON STATUS
     let emailMessage = '';
@@ -236,6 +248,22 @@ WellVision Optical Team
       }
     }
 
+    // Keep the customer's bill in sync when the order is collected.
+    if (status === 'Customer Collected') {
+      try {
+        await Invoice.findOneAndUpdate(
+          { orderNo: order.orderNumber },
+          {
+            status: 'collected',
+            advance: Number(order.total) || 0,
+            balance: 0,
+          }
+        );
+      } catch (billErr) {
+        console.error('Order bill update error:', billErr);
+      }
+    }
+
     res.json({ success: true, data: order });
 
   } catch (err) {
@@ -256,16 +284,18 @@ export const createOrder = async (req, res) => {
     }
 
     // Link the order to the matching customer record so it can appear in the
-    // customer's Job Card. Fall back to matching the email or full name typed
-    // into the Add Order form.
-    let resolvedCustomerId = null;
+    // customer's Job Card and Bills. Fall back to matching the email or full
+    // name typed into the Add Order form.
+    let resolvedCustomer = null;
     if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
-      const customerExists = await Customer.exists({ _id: customerId });
-      if (customerExists) resolvedCustomerId = customerId;
+      resolvedCustomer = await Customer.findById(customerId)
+        .select('_id givenName familyName phoneNo address email')
+        .lean();
     }
-    if (!resolvedCustomerId) {
-      resolvedCustomerId = await findCustomerIdForOrder(customerName, customerEmail);
+    if (!resolvedCustomer) {
+      resolvedCustomer = await findCustomerForOrder(customerName, customerEmail);
     }
+    const resolvedCustomerId = resolvedCustomer?._id || null;
 
     // Auto-generate orderNumber if not provided
     let effectiveOrderNumber = (orderNumber || '').trim();
@@ -356,6 +386,15 @@ export const createOrder = async (req, res) => {
 
       await session.commitTransaction();
       const createdOrder = order[0];
+
+      // Create the customer's bill for this order. Orders that cannot be
+      // matched to a customer record (walk-ins) have no customer card, so
+      // they do not generate a bill.
+      try {
+        await createBillForOrder(createdOrder, resolvedCustomer, req.user?.id);
+      } catch (billErr) {
+        console.error('Order bill creation error:', billErr);
+      }
 
       // ORDER CONFIRMATION EMAIL
       if (createdOrder.customerEmail) {
@@ -464,15 +503,19 @@ export const previewOrderNumber = async (req, res) => {
 export const collectOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const order = await Order.findByIdAndUpdate(id, { collected: true, status: 'Customer Collected' }, { new: true });
+    const orderDoc = await Order.findById(id);
+    if (!orderDoc) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    orderDoc.collected = true;
+    orderDoc.status = 'Customer Collected';
+    orderDoc.amountGiven = Number(orderDoc.total) || 0;
+    await orderDoc.save();
+    const order = orderDoc.toObject();
 
-    // Update corresponding invoice status to 'collected'
-    const InvoiceModel = (await import('../models/invoiceModel.js')).default;
-    await InvoiceModel.findOneAndUpdate(
+    // Collecting the order settles its bill.
+    await Invoice.findOneAndUpdate(
       { orderNo: order.orderNumber },
-      { status: 'collected' },
+      { status: 'collected', advance: Number(order.total) || 0, balance: 0 },
       { new: true }
     );
 

@@ -91,7 +91,8 @@ function DailyReports() {
       grouped[dateKey].totalOrders += 1;
     });
 
-    // Process invoices for revenue
+    // Process invoices for revenue. Revenue is the money the customer has
+    // actually paid (advance), so unpaid balances do not inflate the report.
     invoices.forEach(invoice => {
       const dateKey = new Date(invoice.date).toISOString().split('T')[0];
       if (!grouped[dateKey]) {
@@ -103,7 +104,7 @@ function DailyReports() {
           revenue: 0
         };
       }
-      grouped[dateKey].revenue += invoice.amount;
+      grouped[dateKey].revenue += Number(invoice.advance) || 0;
     });
 
     return Object.values(grouped).sort((a, b) => new Date(a.date) - new Date(b.date));

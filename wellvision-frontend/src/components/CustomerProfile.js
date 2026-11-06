@@ -49,6 +49,29 @@ const CustomerProfile = () => {
     return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
   };
 
+  // Unpaid part of an order. Orders collected before payments were tracked
+  // have no amountGiven, so treat them as settled.
+  const getOrderDueBalance = (order, total) => {
+    const amountGiven = Number(order.amountGiven) || 0;
+    if (order.status === 'Customer Collected' && amountGiven <= 0) return 0;
+    return Math.max(total - amountGiven, 0);
+  };
+
+  const startNewOrderForCustomer = () => {
+    const customerName = `${customer.givenName || ''} ${customer.familyName || ''}`
+      .trim()
+      .replace(/\s+/g, ' ');
+    navigate('/orders', {
+      state: {
+        newOrderForCustomer: {
+          customerId: customer._id,
+          customerName,
+          customerEmail: customer.email || '',
+        },
+      },
+    });
+  };
+
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -90,7 +113,7 @@ const CustomerProfile = () => {
     const fetchInvoices = async () => {
       setInvoicesLoading(true);
       try {
-        const res = await fetch(`http://localhost:4000/api/invoices?customerId=${customerId}`, {
+        const res = await fetch(`http://localhost:4000/api/invoices?customerId=${customerId}&limit=200`, {
           credentials: 'include',
         });
         const data = await res.json();
@@ -198,22 +221,6 @@ const CustomerProfile = () => {
                 key={tab}
                 className={`profile-tab-btn ${activeTab === tab ? 'active' : ''}`}
                 onClick={() => {
-                  if (tab === 'Orders') {
-                    const customerName = `${customer.givenName || ''} ${customer.familyName || ''}`
-                      .trim()
-                      .replace(/\s+/g, ' ');
-                    navigate('/orders', {
-                      state: {
-                        newOrderForCustomer: {
-                          customerId: customer._id,
-                          customerName,
-                          customerEmail: customer.email || '',
-                        },
-                      },
-                    });
-                    return;
-                  }
-
                   setActiveTab(tab);
                   navigate(`/customer/${customerId}?tab=${encodeURIComponent(tab)}`, { replace: true });
                 }}
@@ -362,6 +369,108 @@ const CustomerProfile = () => {
             </table>
           )}
 
+          {activeTab === 'Orders' && (
+            <div className="profile-orders-tab">
+              <div className="profile-orders-header">
+                <div>
+                  <h4>Customer Orders</h4>
+                  <p className="profile-orders-subtitle">
+                    Order history for {customer.givenName} {customer.familyName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="profile-create-order-btn"
+                  onClick={startNewOrderForCustomer}
+                >
+                  <Plus size={16} />
+                  Create New Order
+                </button>
+              </div>
+
+              {ordersLoading ? (
+                <p className="profile-job-card-empty">Loading orders...</p>
+              ) : ordersError ? (
+                <p className="profile-job-card-empty">{ordersError}</p>
+              ) : orders.length === 0 ? (
+                <p className="profile-job-card-empty">
+                  No orders found for this customer yet. Use Create New Order to add one.
+                </p>
+              ) : (
+                <div className="profile-orders-table-wrapper">
+                  <table className="profile-orders-table">
+                    <thead>
+                      <tr>
+                        <th>Order #</th>
+                        <th>Date</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Due Balance</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map((order) => {
+                        const statusStyle = getOrderStatusStyle(order.status);
+                        const itemTotal = (order.items || []).reduce(
+                          (sum, item) =>
+                            sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+                          0
+                        );
+                        const total = Number(order.total ?? itemTotal);
+                        const dueBalance = getOrderDueBalance(order, total);
+                        const itemLabel =
+                          (order.items || [])
+                            .map((item) => {
+                              const name = item.description || item.sku || 'Product';
+                              return `${name} × ${Number(item.quantity) || 0}`;
+                            })
+                            .join(', ') || '—';
+
+                        return (
+                          <tr key={order._id}>
+                            <td>
+                              <span className="profile-order-number">
+                                {order.orderNumber}
+                              </span>
+                            </td>
+                            <td>{formatOrderDate(order.placedAt)}</td>
+                            <td className="profile-order-items">{itemLabel}</td>
+                            <td className="profile-order-total">
+                              Rs. {total.toLocaleString()}
+                            </td>
+                            <td>
+                              <span
+                                className={
+                                  dueBalance > 0
+                                    ? 'profile-order-due'
+                                    : 'profile-order-settled'
+                                }
+                              >
+                                Rs. {dueBalance.toLocaleString()}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className="job-card-status"
+                                style={{
+                                  backgroundColor: statusStyle.bg,
+                                  color: statusStyle.color,
+                                }}
+                              >
+                                {getOrderStatusLabel(order.status)}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'Job Card' && (
             <div className="profile-job-card-tab">
               {ordersLoading ? (
@@ -458,11 +567,11 @@ const CustomerProfile = () => {
 
           {activeTab === 'Bills' && (
             <div className="profile-bills-tab">
-              <h4>Customer Invoices</h4>
+              <h4>Customer Bills</h4>
               {invoicesLoading ? (
-                <p>Loading invoices...</p>
+                <p>Loading bills...</p>
               ) : invoices.length === 0 ? (
-                <p>No invoices found for this customer yet.</p>
+                <p>No bills found for this customer yet.</p>
               ) : (
                 <table className="profile-invoices-table">
                   <thead>
