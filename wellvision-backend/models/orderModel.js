@@ -10,6 +10,7 @@ const orderItemSchema = new mongoose.Schema({
 
 const orderSchema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: false },
   customerName: { type: String, required: true },
   customerEmail: { type: String },
   items: [orderItemSchema],

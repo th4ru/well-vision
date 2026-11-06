@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import transporter from '../config/nodemailer.js';
 import Counter from '../models/counterModel.js';
 import Settings from '../models/settingsModel.js';
+import Customer from '../models/customer.js';
 
 // Allowed statuses
 const ALLOWED_STATUSES = [
@@ -14,6 +15,39 @@ const ALLOWED_STATUSES = [
   'Ready for Customer',
   'Customer Collected'
 ];
+
+const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Try to attach an order to a customer record using the email or full name
+// typed into the Add Order form.
+const findCustomerIdForOrder = async (customerName, customerEmail) => {
+  const email = (customerEmail || '').trim();
+  if (email) {
+    const byEmail = await Customer.findOne({
+      email: { $regex: `^${escapeRegExp(email)}$`, $options: 'i' },
+    })
+      .select('_id')
+      .lean();
+    if (byEmail) return byEmail._id;
+  }
+
+  const name = (customerName || '').trim().replace(/\s+/g, ' ');
+  if (name) {
+    const [givenName, ...rest] = name.split(' ');
+    const familyName = rest.join(' ');
+    if (givenName && familyName) {
+      const byName = await Customer.findOne({
+        givenName: { $regex: `^${escapeRegExp(givenName)}$`, $options: 'i' },
+        familyName: { $regex: `^${escapeRegExp(familyName)}$`, $options: 'i' },
+      })
+        .select('_id')
+        .lean();
+      if (byName) return byName._id;
+    }
+  }
+
+  return null;
+};
 
 // Shared sequence helper for auto-incrementing order numbers
 async function getNextSequence(name) {
@@ -49,6 +83,43 @@ export const getPendingOrders = async (req, res) => {
   } catch (err) {
     console.error('getPendingOrders error', err);
     res.status(500).json({ success: false, message: 'Failed to fetch pending orders' });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// GET ORDERS FOR ONE CUSTOMER (job card)
+// ---------------------------------------------------------------------------
+export const getCustomerOrders = async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.params.customerId).lean();
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    const fullName = `${customer.givenName || ''} ${customer.familyName || ''}`
+      .trim()
+      .replace(/\s+/g, ' ');
+
+    const conditions = [{ customerId: customer._id }];
+    if (customer.email) {
+      conditions.push({
+        customerEmail: { $regex: `^${escapeRegExp(customer.email.trim())}$`, $options: 'i' },
+      });
+    }
+    if (fullName) {
+      conditions.push({
+        customerName: { $regex: `^${escapeRegExp(fullName)}$`, $options: 'i' },
+      });
+    }
+
+    const orders = await Order.find({ $or: conditions })
+      .sort({ placedAt: -1 })
+      .lean();
+
+    res.json({ success: true, data: orders });
+  } catch (err) {
+    console.error('getCustomerOrders error', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch customer orders' });
   }
 };
 
@@ -178,10 +249,22 @@ WellVision Optical Team
 // ---------------------------------------------------------------------------
 export const createOrder = async (req, res) => {
   try {
-    const { orderNumber, customerName, customerEmail, items = [], status = 'Order Received', total = 0 } = req.body;
+    const { orderNumber, customerId, customerName, customerEmail, items = [], status = 'Order Received', total = 0 } = req.body;
 
     if (!customerName) {
       return res.status(400).json({ success: false, message: 'customerName is required' });
+    }
+
+    // Link the order to the matching customer record so it can appear in the
+    // customer's Job Card. Fall back to matching the email or full name typed
+    // into the Add Order form.
+    let resolvedCustomerId = null;
+    if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
+      const customerExists = await Customer.exists({ _id: customerId });
+      if (customerExists) resolvedCustomerId = customerId;
+    }
+    if (!resolvedCustomerId) {
+      resolvedCustomerId = await findCustomerIdForOrder(customerName, customerEmail);
     }
 
     // Auto-generate orderNumber if not provided
@@ -250,6 +333,7 @@ export const createOrder = async (req, res) => {
     try {
       const order = await Order.create([{
         orderNumber: effectiveOrderNumber,
+        customerId: resolvedCustomerId,
         customerName,
         customerEmail,
         items,

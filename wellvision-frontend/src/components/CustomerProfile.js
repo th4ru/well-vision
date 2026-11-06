@@ -22,6 +22,30 @@ const CustomerProfile = () => {
   const [editForm, setEditForm] = useState({});
   const [invoices, setInvoices] = useState([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState('');
+
+  const getOrderStatusLabel = (status) =>
+    status === 'In Lab Processing' ? 'Lab Processing' : status;
+
+  const getOrderStatusStyle = (status) => {
+    const badges = {
+      'Order Received': { bg: '#DBEAFE', color: '#1E3A8A' },
+      'Order Placed in Lab': { bg: '#FEF3C7', color: '#92400E' },
+      'In Lab Processing': { bg: '#FFF7ED', color: '#92400E' },
+      'Transit to Shop': { bg: '#F3E8FF', color: '#6D28D9' },
+      'Ready for Customer': { bg: '#DCFCE7', color: '#166534' },
+      'Customer Collected': { bg: '#E0F2FE', color: '#0C4A6E' },
+    };
+    return badges[status] || { bg: '#F1F5F9', color: '#0F172A' };
+  };
+
+  const formatOrderDate = (value) => {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString();
+  };
 
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
@@ -82,6 +106,35 @@ const CustomerProfile = () => {
     };
 
     fetchInvoices();
+  }, [customerId]);
+
+  // Fetch this customer's orders for the Job Card tab
+  useEffect(() => {
+    if (!customerId) return;
+
+    const fetchOrders = async () => {
+      setOrdersLoading(true);
+      setOrdersError('');
+      try {
+        const res = await fetch(`http://localhost:4000/api/orders/customer/${customerId}`, {
+          credentials: 'include',
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Failed to fetch customer orders');
+        }
+
+        setOrders(data.data || []);
+      } catch (error) {
+        setOrdersError(error.message);
+        toast.error(error.message);
+      } finally {
+        setOrdersLoading(false);
+      }
+    };
+
+    fetchOrders();
   }, [customerId]);
 
   if (loading) return <div className="loading-message">Loading customer profile...</div>;
@@ -293,7 +346,95 @@ const CustomerProfile = () => {
 
           {activeTab === 'Job Card' && (
             <div className="profile-job-card-tab">
-              <p>Job Card content will be displayed here.</p>
+              {ordersLoading ? (
+                <p className="profile-job-card-empty">Loading job cards...</p>
+              ) : ordersError ? (
+                <p className="profile-job-card-empty">{ordersError}</p>
+              ) : orders.length === 0 ? (
+                <p className="profile-job-card-empty">
+                  No orders found for this customer yet.
+                </p>
+              ) : (
+                <div className="job-card-list">
+                  {orders.map((order) => {
+                    const statusStyle = getOrderStatusStyle(order.status);
+                    const itemTotal = (order.items || []).reduce(
+                      (sum, item) =>
+                        sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+                      0
+                    );
+                    const total = Number(order.total ?? itemTotal);
+
+                    return (
+                      <article className="job-card" key={order._id}>
+                        <div className="job-card-header">
+                          <div>
+                            <h4>Job Card</h4>
+                            <span className="job-card-order-no">{order.orderNumber}</span>
+                          </div>
+                          <span
+                            className="job-card-status"
+                            style={{
+                              backgroundColor: statusStyle.bg,
+                              color: statusStyle.color,
+                            }}
+                          >
+                            {getOrderStatusLabel(order.status)}
+                          </span>
+                        </div>
+
+                        <div className="job-card-meta">
+                          <div>
+                            <span>Order Date</span>
+                            <strong>{formatOrderDate(order.placedAt)}</strong>
+                          </div>
+                          <div>
+                            <span>Customer</span>
+                            <strong>{order.customerName}</strong>
+                          </div>
+                          <div>
+                            <span>Total Amount</span>
+                            <strong>Rs. {total.toLocaleString()}</strong>
+                          </div>
+                        </div>
+
+                        <table className="job-card-items-table">
+                          <thead>
+                            <tr>
+                              <th>Product</th>
+                              <th>Qty</th>
+                              <th>Unit Price</th>
+                              <th>Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(order.items || []).map((item, index) => (
+                              <tr key={item._id || index}>
+                                <td>{item.description || item.sku || 'Product'}</td>
+                                <td>{item.quantity}</td>
+                                <td>
+                                  Rs. {Number(item.unitPrice || 0).toLocaleString()}
+                                </td>
+                                <td>
+                                  Rs.{' '}
+                                  {(
+                                    Number(item.quantity || 0) *
+                                    Number(item.unitPrice || 0)
+                                  ).toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+
+                        {order.customerEmail && (
+                          <p className="job-card-email">Email: {order.customerEmail}</p>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
