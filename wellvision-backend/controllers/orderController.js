@@ -344,8 +344,28 @@ export const previewOrderNumber = async (req, res) => {
     }
 
     const counter = await Counter.findOne({ name: 'orderNo' });
-    const nextSeq = (counter?.seq || 0) + 1;
-    const formatted = `${settings.order.orderPrefix}-${String(nextSeq).padStart(4, '0')}`;
+    let nextSeq = (counter?.seq || 0) + 1;
+
+    // Orders created before the counter existed (or with a manually supplied
+    // number) are not reflected in the counter, so make sure the previewed
+    // number does not collide with one that is already stored.
+    const prefix = settings.order.orderPrefix;
+    const numberPrefix = `${prefix}-`;
+    const existingOrders = await Order.find({}, { orderNumber: 1 }).lean();
+    const highestExistingSeq = existingOrders.reduce((highest, order) => {
+      const value = order.orderNumber;
+      if (typeof value !== 'string' || !value.startsWith(numberPrefix)) {
+        return highest;
+      }
+      const suffix = value.slice(numberPrefix.length);
+      if (!/^\d+$/.test(suffix)) return highest;
+      return Math.max(highest, Number(suffix));
+    }, 0);
+    if (highestExistingSeq >= nextSeq) {
+      nextSeq = highestExistingSeq + 1;
+    }
+
+    const formatted = `${prefix}-${String(nextSeq).padStart(4, '0')}`;
     res.json({ success: true, nextOrderNumber: formatted });
   } catch (err) {
     console.error('previewOrderNumber error', err);

@@ -15,6 +15,29 @@ import {
   ShoppingCart
 } from 'lucide-react';
 
+const DEFAULT_ORDER_FORM = {
+  orderNumber: '',
+  customerName: '',
+  customerEmail: '',
+  status: 'Order Received',
+  items: [],
+  notes: ''
+};
+
+// Status choices shown when creating an order.
+// "Lab Processing" is displayed to the user while the backend keeps its
+// existing stored value, "In Lab Processing".
+const ADD_ORDER_STATUS_OPTIONS = [
+  { value: 'Order Received', label: 'Order Received' },
+  { value: 'Order Placed in Lab', label: 'Order Placed in Lab' },
+  { value: 'In Lab Processing', label: 'Lab Processing' },
+  { value: 'Ready for Customer', label: 'Ready for Customer' },
+  { value: 'Customer Collected', label: 'Customer Collected' }
+];
+
+const getStatusLabel = (status) =>
+  status === 'In Lab Processing' ? 'Lab Processing' : status;
+
 function Orders() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,14 +55,15 @@ function Orders() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [orderForm, setOrderForm] = useState(() => {
     // Restore form data from localStorage if available
-    const savedForm = localStorage.getItem('orderFormData');
-    return savedForm ? JSON.parse(savedForm) : {
-      orderNumber: '',
-      customerName: '',
-      customerEmail: '',
-      items: [],
-      notes: ''
-    };
+    try {
+      const savedForm = localStorage.getItem('orderFormData');
+      return savedForm
+        ? { ...DEFAULT_ORDER_FORM, ...JSON.parse(savedForm) }
+        : DEFAULT_ORDER_FORM;
+    } catch (error) {
+      console.error('Error restoring order form:', error);
+      return DEFAULT_ORDER_FORM;
+    }
   });
 
   // Filter states
@@ -51,7 +75,7 @@ function Orders() {
     { value: 'all', label: 'All Statuses' },
     { value: 'Order Received', label: 'Order Received' },
     { value: 'Order Placed in Lab', label: 'Order Placed in Lab' },
-    { value: 'In Lab Processing', label: 'In Lab Processing' },
+    { value: 'In Lab Processing', label: 'Lab Processing' },
     { value: 'Transit to Shop', label: 'Transit to Shop' },
     { value: 'Ready for Customer', label: 'Ready for Customer' },
     { value: 'Customer Collected', label: 'Customer Collected' }
@@ -370,14 +394,13 @@ function Orders() {
           })),
           notes: data.data.customerEmail || ''
         }]);
+        setStatusCounts(prevCounts => ({
+          ...prevCounts,
+          [data.data.status]: (prevCounts[data.data.status] || 0) + 1
+        }));
         setShowAddModal(false);
-        setOrderForm({
-          orderNumber: '',
-          customerName: '',
-          customerEmail: '',
-          items: [],
-          notes: ''
-        });
+        setOrderForm(DEFAULT_ORDER_FORM);
+        localStorage.removeItem('orderFormData');
         showNotification('Order created successfully!');
       } else {
         showNotification('Failed to create order: ' + data.message, 'error');
@@ -409,7 +432,7 @@ function Orders() {
                   Order Placed in Lab: {statusCounts['Order Placed in Lab'] || 0}
                 </span>
                 <span className="stat-badge" style={{ backgroundColor: '#FFF7ED', color: '#92400E' }}>
-                  In Lab Processing: {statusCounts['In Lab Processing'] || 0}
+                  Lab Processing: {statusCounts['In Lab Processing'] || 0}
                 </span>
                 <span className="stat-badge" style={{ backgroundColor: '#F3E8FF', color: '#6D28D9' }}>
                   Transit to Shop: {statusCounts['Transit to Shop'] || 0}
@@ -524,7 +547,7 @@ function Orders() {
                               color: statusStyle.color
                             }}
                           >
-                            {order.status}
+                            {getStatusLabel(order.status)}
                           </span>
                         </td>
                         <td>
@@ -594,7 +617,7 @@ function Orders() {
                           className="status-badge"
                           style={getStatusBadge(selectedOrder.status)}
                         >
-                          {selectedOrder.status}
+                          {getStatusLabel(selectedOrder.status)}
                         </span>
                       </div>
                     </div>
@@ -875,6 +898,30 @@ function Orders() {
                     </table>
                   </div>
                 )}
+
+                {/* Update Status */}
+                <div className="order-detail-section">
+                  <h4>Update Status</h4>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="order-status">
+                      Status
+                    </label>
+                    <select
+                      id="order-status"
+                      className="form-select"
+                      value={orderForm.status || 'Order Received'}
+                      onChange={(e) =>
+                        setOrderForm({ ...orderForm, status: e.target.value })
+                      }
+                    >
+                      {ADD_ORDER_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div className="modal-footer">
