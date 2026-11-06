@@ -452,6 +452,19 @@
   text-align: center;
 }
 
+.due-balance {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.due-balance-pending {
+  color: #b91c1c;
+}
+
+.due-balance-settled {
+  color: #047857;
+}
+
 .table-actions {
   display: flex;
   gap: 8px;
@@ -864,7 +877,7 @@
   }
 
   .orders-table {
-    min-width: 600px;
+    min-width: 860px;
   }
 
   .modal-content.order-modal {

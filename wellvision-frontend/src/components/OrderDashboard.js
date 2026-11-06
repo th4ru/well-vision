@@ -39,6 +39,16 @@ const ADD_ORDER_STATUS_OPTIONS = [
 const getStatusLabel = (status) =>
   status === 'In Lab Processing' ? 'Lab Processing' : status;
 
+// Due balance is the unpaid part of an order. Orders that predate the
+// "Amount Customer Gives" field have no recorded payment; once collected we
+// treat them as settled instead of showing the full total as outstanding.
+const getDueBalance = (order) => {
+  const total = Number(order.total) || 0;
+  const amountGiven = Number(order.amountGiven) || 0;
+  if (order.status === 'Customer Collected' && amountGiven <= 0) return 0;
+  return Math.max(total - amountGiven, 0);
+};
+
 function Orders() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -118,6 +128,7 @@ function Orders() {
             placedAt: order.placedAt,
             status: order.status,
             total: order.total,
+            amountGiven: order.amountGiven || 0,
             items: order.items.map(item => ({
               product: item.description || item.sku,
               quantity: item.quantity,
@@ -413,6 +424,7 @@ function Orders() {
           placedAt: data.data.placedAt,
           status: data.data.status,
           total: data.data.total,
+          amountGiven: data.data.amountGiven || 0,
           items: data.data.items.map(item => ({
             product: item.description || item.sku,
             quantity: item.quantity,
@@ -543,6 +555,7 @@ function Orders() {
                     <th>Date</th>
                     <th>Items</th>
                     <th>Total</th>
+                    <th>Due Balance</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -550,6 +563,7 @@ function Orders() {
                 <tbody>
                   {filteredOrders.map(order => {
                     const statusStyle = getStatusBadge(order.status);
+                    const dueBalance = getDueBalance(order);
                     return (
                       <tr key={order._id}>
                         <td>
@@ -567,6 +581,15 @@ function Orders() {
                         <td>{order.items.length} item(s)</td>
                         <td style={{ fontWeight: 600, color: '#0d9488' }}>
                           Rs. {order.total.toLocaleString()}
+                        </td>
+                        <td>
+                          <span
+                            className={`due-balance ${
+                              dueBalance > 0 ? 'due-balance-pending' : 'due-balance-settled'
+                            }`}
+                          >
+                            Rs. {dueBalance.toLocaleString()}
+                          </span>
                         </td>
                         <td>
                           <span
