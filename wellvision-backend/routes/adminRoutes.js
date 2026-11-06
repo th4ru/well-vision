@@ -12,6 +12,7 @@ import {
   getCurrentUser,
   getDashboard,
   getSales,
+  updateCurrentUser,
 } from '../controllers/dashboardController.js';
 import {
   createStaff,
@@ -51,6 +52,7 @@ const adminFilter = {
 */
 router.get('/general/dashboard', userAuth, adminOnly, getDashboard);
 router.get('/general/me', userAuth, getCurrentUser);
+router.put('/general/me', userAuth, updateCurrentUser);
 router.get('/sales/sales', userAuth, adminOnly, getSales);
 router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
 router.get('/client/products', userAuth, adminOnly, getAdminProducts);

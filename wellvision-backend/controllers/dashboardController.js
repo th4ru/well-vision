@@ -393,3 +393,91 @@ export const getCurrentUser = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// PUT /api/admin/general/me
+// Lets the logged-in account edit its own profile details (name/email/phone).
+export const updateCurrentUser = async (req, res) => {
+  const updates = {};
+
+  if (req.body.name !== undefined) {
+    const name = (req.body.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Full name is required' });
+    }
+    updates.name = name;
+  }
+
+  if (req.body.email !== undefined) {
+    const email = (req.body.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Invalid email format' });
+    }
+    updates.email = email;
+  }
+
+  if (req.body.phone !== undefined) {
+    const phone = (req.body.phone || '').trim();
+    if (phone && !/^\+?[0-9\s-]{7,15}$/.test(phone)) {
+      return res.status(400).json({ success: false, message: 'Invalid phone format' });
+    }
+    updates.phone = phone;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ success: false, message: 'No profile fields to update' });
+  }
+
+  try {
+    const user = await userModel.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (updates.email && updates.email !== user.email.toLowerCase()) {
+      const taken = await userModel.findOne({
+        email: updates.email,
+        _id: { $ne: user._id },
+      });
+      if (taken) {
+        return res.status(409).json({ success: false, message: 'Email already in use' });
+      }
+    }
+
+    // Editing an admin account must not accidentally revoke admin access
+    // (the built-in admin is recognised by email as well as role).
+    const wasAdmin =
+      user.email === 'admin@example.com' || /^admin$/i.test(user.role || '');
+
+    if (updates.name !== undefined) user.name = updates.name;
+    if (updates.email !== undefined) user.email = updates.email;
+    if (updates.phone !== undefined) user.phone = updates.phone;
+    if (wasAdmin) user.role = 'Admin';
+
+    await user.save();
+
+    // Keep the same role promotion used by the login/get-me controllers.
+    const isAdmin = user.email === 'admin@example.com' || /^admin$/i.test(user.role || '');
+
+    return res.json({
+      success: true,
+      message: 'Account details updated successfully',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        avatar: user.avatar || '',
+        role: isAdmin ? 'Admin' : user.role,
+        isAccountVerified: user.isAccountVerified,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
+      },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: 'Email already in use' });
+    }
+    console.error('PUT /general/me error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

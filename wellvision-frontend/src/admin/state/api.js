@@ -101,6 +101,14 @@ export const api = createApi({
       query: () => "general/me",
       providesTags: ["User"],
     }),
+    updateMe: build.mutation({
+      query: (profileData) => ({
+        url: "general/me",
+        method: "PUT",
+        body: profileData,
+      }),
+      invalidatesTags: ["User"],
+    }),
     getProducts: build.query({
       query: () => "client/products",
       providesTags: ["Products"],
@@ -213,6 +221,7 @@ export const api = createApi({
 export const {
   useGetUserQuery,
   useGetMeQuery,
+  useUpdateMeMutation,
   useGetProductsQuery,
   useAddProductMutation,
   useGetCustomersQuery,

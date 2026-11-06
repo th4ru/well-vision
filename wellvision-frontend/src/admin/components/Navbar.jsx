@@ -7,22 +7,27 @@ import {
   SettingsOutlined,
   ArrowDropDownOutlined,
   Close,
+  Edit,
+  Save,
 } from "@mui/icons-material";
 import FlexBetween from "./FlexBetween";
 import { useDispatch } from "react-redux";
 import { setMode } from "../state/globalSlice";
 import profileImage from "../assets/profile.jpeg";
 import {
+  Alert,
   AppBar,
   Avatar,
   Button,
   Box,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  TextField,
   Typography,
   IconButton,
   InputBase,
@@ -33,6 +38,10 @@ import {
 } from "@mui/material";
 import { AuthContext } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useUpdateMeMutation } from "../state/api";
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^\+?[0-9\s-]{7,15}$/;
 
 const formatDate = (value) => {
   if (!value) return "N/A";
@@ -40,14 +49,20 @@ const formatDate = (value) => {
   return Number.isNaN(date.getTime()) ? "N/A" : date.toLocaleString();
 };
 
+const EMPTY_FORM = { name: "", email: "", phone: "" };
+
 const Navbar = ({ user = {}, isSidebarOpen, setIsSidebarOpen }) => {
   const dispatch = useDispatch();
   const theme = useTheme();
   const { logoutUser } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [updateMe, { isLoading: isSaving }] = useUpdateMeMutation();
 
   const [anchorEl, setAnchorEl] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [feedback, setFeedback] = useState(null);
   const isOpen = Boolean(anchorEl);
   const handleClick = (event) => setAnchorEl(event.currentTarget);
   const handleClose = () => setAnchorEl(null);
@@ -71,6 +86,88 @@ const Navbar = ({ user = {}, isSidebarOpen, setIsSidebarOpen }) => {
     logoutUser();
     navigate('/login');
     handleClose();
+  };
+
+  const openAccountDetails = () => {
+    setIsEditing(false);
+    setFeedback(null);
+    setForm(EMPTY_FORM);
+    setSettingsOpen(true);
+  };
+
+  const closeAccountDetails = () => {
+    if (isSaving) return;
+    setSettingsOpen(false);
+    setIsEditing(false);
+    setFeedback(null);
+  };
+
+  const handleStartEdit = () => {
+    setForm({
+      name: displayUser.name || "",
+      email: displayUser.email || "",
+      phone: displayUser.phone || "",
+    });
+    setFeedback(null);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    if (isSaving) return;
+    setIsEditing(false);
+    setFeedback(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const handleChange = (event) => {
+    const { name: field, value } = event.target;
+    setForm((previous) => ({ ...previous, [field]: value }));
+    if (feedback?.severity === "error") setFeedback(null);
+  };
+
+  const handleSave = async () => {
+    const nameValue = form.name.trim();
+    const emailValue = form.email.trim();
+    const phoneValue = form.phone.trim();
+
+    if (!nameValue) {
+      setFeedback({ severity: "error", message: "Full name is required." });
+      return;
+    }
+    if (!EMAIL_REGEX.test(emailValue)) {
+      setFeedback({ severity: "error", message: "Enter a valid email address." });
+      return;
+    }
+    if (phoneValue && !PHONE_REGEX.test(phoneValue)) {
+      setFeedback({
+        severity: "error",
+        message: "Enter a valid phone number (7-15 digits, optional + and dashes).",
+      });
+      return;
+    }
+
+    try {
+      const result = await updateMe({
+        name: nameValue,
+        email: emailValue,
+        phone: phoneValue,
+      }).unwrap();
+
+      setIsEditing(false);
+      setForm(EMPTY_FORM);
+      setFeedback({
+        severity: "success",
+        message: result?.message || "Account details updated successfully.",
+      });
+    } catch (error) {
+      setFeedback({
+        severity: "error",
+        message:
+          error?.data?.message ||
+          error?.message ||
+          "Failed to update account details.",
+      });
+    }
   };
 
   return (
@@ -112,7 +209,7 @@ const Navbar = ({ user = {}, isSidebarOpen, setIsSidebarOpen }) => {
           <IconButton
             title="Account settings"
             aria-label="Account settings"
-            onClick={() => setSettingsOpen(true)}
+            onClick={openAccountDetails}
           >
             <SettingsOutlined sx={{ fontSize: "25px" }} />
           </IconButton>
@@ -164,7 +261,7 @@ const Navbar = ({ user = {}, isSidebarOpen, setIsSidebarOpen }) => {
             >
               <MenuItem
                 onClick={() => {
-                  setSettingsOpen(true);
+                  openAccountDetails();
                   handleClose();
                 }}
               >
@@ -179,7 +276,7 @@ const Navbar = ({ user = {}, isSidebarOpen, setIsSidebarOpen }) => {
       {/* ACCOUNT DETAILS DIALOG */}
       <Dialog
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={closeAccountDetails}
         maxWidth="xs"
         fullWidth
       >
@@ -191,11 +288,12 @@ const Navbar = ({ user = {}, isSidebarOpen, setIsSidebarOpen }) => {
             color: theme.palette.secondary[100],
           }}
         >
-          Account Details
+          {isEditing ? "Edit Account Details" : "Account Details"}
           <IconButton
             aria-label="close"
-            onClick={() => setSettingsOpen(false)}
+            onClick={closeAccountDetails}
             size="small"
+            disabled={isSaving}
           >
             <Close fontSize="small" />
           </IconButton>
@@ -235,33 +333,105 @@ const Navbar = ({ user = {}, isSidebarOpen, setIsSidebarOpen }) => {
             </Box>
           </Box>
           <Divider sx={{ mb: "0.75rem" }} />
-          {accountDetails.map(({ label, value }) => (
-            <Box
-              key={label}
-              display="flex"
-              justifyContent="space-between"
-              alignItems="flex-start"
-              gap="1rem"
-              py="0.5rem"
-            >
-              <Typography
-                variant="body2"
-                sx={{ color: theme.palette.secondary[300], minWidth: "110px" }}
-              >
-                {label}
-              </Typography>
-              <Typography
-                variant="body2"
-                textAlign="right"
-                sx={{ wordBreak: "break-word" }}
-              >
-                {value}
-              </Typography>
+
+          {feedback && (
+            <Alert severity={feedback.severity} sx={{ mb: "1rem" }}>
+              {feedback.message}
+            </Alert>
+          )}
+
+          {isEditing ? (
+            <Box display="grid" gap="1rem">
+              <TextField
+                label="Full Name"
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                fullWidth
+                size="small"
+                required
+                autoFocus
+                disabled={isSaving}
+              />
+              <TextField
+                label="Email"
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                fullWidth
+                size="small"
+                required
+                disabled={isSaving}
+              />
+              <TextField
+                label="Phone"
+                name="phone"
+                value={form.phone}
+                onChange={handleChange}
+                fullWidth
+                size="small"
+                disabled={isSaving}
+              />
             </Box>
-          ))}
+          ) : (
+            accountDetails.map(({ label, value }) => (
+              <Box
+                key={label}
+                display="flex"
+                justifyContent="space-between"
+                alignItems="flex-start"
+                gap="1rem"
+                py="0.5rem"
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ color: theme.palette.secondary[300], minWidth: "110px" }}
+                >
+                  {label}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  textAlign="right"
+                  sx={{ wordBreak: "break-word" }}
+                >
+                  {value}
+                </Typography>
+              </Box>
+            ))
+          )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSettingsOpen(false)}>Close</Button>
+        <DialogActions sx={{ justifyContent: "space-between" }}>
+          {isEditing ? (
+            <Button
+              onClick={handleSave}
+              variant="contained"
+              disabled={isSaving}
+              startIcon={
+                isSaving ? <CircularProgress size={18} color="inherit" /> : <Save />
+              }
+              sx={{
+                backgroundColor: theme.palette.secondary[300],
+                color: theme.palette.primary[600],
+                fontWeight: "bold",
+                "&:hover": {
+                  backgroundColor: theme.palette.secondary[400],
+                },
+              }}
+            >
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+          ) : (
+            <Button onClick={handleStartEdit} startIcon={<Edit />} variant="contained">
+              Edit
+            </Button>
+          )}
+          <Button
+            onClick={isEditing ? handleCancelEdit : closeAccountDetails}
+            disabled={isSaving}
+          >
+            {isEditing ? "Cancel" : "Close"}
+          </Button>
         </DialogActions>
       </Dialog>
     </AppBar>
