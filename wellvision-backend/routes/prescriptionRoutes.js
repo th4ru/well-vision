@@ -4,6 +4,7 @@ import express from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
 import Prescription from '../models/prescriptionModel.js';
 import Customer from '../models/customer.js';
@@ -104,6 +105,60 @@ router.post('/customer/:customerId', (req, res) => {
       res.status(500).json({ success: false, message: 'Failed to upload prescription' });
     }
   });
+});
+
+const getStoredFilePath = (prescription) =>
+  path.join(uploadDir, path.basename(prescription.fileName));
+
+// GET: Download a prescription file with its original name.
+router.get('/:id/download', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid prescription id' });
+    }
+
+    const prescription = await Prescription.findById(req.params.id);
+    if (!prescription) {
+      return res.status(404).json({ success: false, message: 'Prescription not found' });
+    }
+
+    const filePath = getStoredFilePath(prescription);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Prescription file not found' });
+    }
+
+    return res.download(filePath, prescription.originalName);
+  } catch (err) {
+    console.error('downloadPrescription error', err);
+    return res.status(500).json({ success: false, message: 'Failed to download prescription' });
+  }
+});
+
+// DELETE: Remove a prescription and its stored file.
+router.delete('/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid prescription id' });
+    }
+
+    const prescription = await Prescription.findById(req.params.id);
+    if (!prescription) {
+      return res.status(404).json({ success: false, message: 'Prescription not found' });
+    }
+
+    const filePath = getStoredFilePath(prescription);
+    await Prescription.deleteOne({ _id: prescription._id });
+    if (fs.existsSync(filePath)) {
+      fs.unlink(filePath, (error) => {
+        if (error) console.error('Failed to remove prescription file', error);
+      });
+    }
+
+    return res.json({ success: true, message: 'Prescription deleted successfully' });
+  } catch (err) {
+    console.error('deletePrescription error', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete prescription' });
+  }
 });
 
 export default router;

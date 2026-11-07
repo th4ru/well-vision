@@ -789,6 +789,50 @@
   text-decoration: none;
 }
 
+.profile-prescription-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.profile-icon-download {
+  background-color: #e0f2fe;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+
+.profile-icon-download:hover {
+  background-color: #bae6fd;
+}
+
+.profile-icon-delete {
+  background-color: #fee2e2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.profile-icon-delete:hover {
+  background-color: #fecaca;
+}
+
+.profile-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (max-width: 640px) {
   .profile-prescriptions-tab {
     padding: 16px;

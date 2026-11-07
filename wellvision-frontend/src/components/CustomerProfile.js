@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, ChevronRight, Upload, FileText, ExternalLink } from 'lucide-react';
+import { Plus, ChevronRight, Upload, FileText, ExternalLink, Download, Trash2 } from 'lucide-react';
 import './CustomerProfile.css';
 import { toast } from 'react-toastify';
 
@@ -13,6 +13,7 @@ const CustomerProfile = () => {
   const [prescriptionsLoading, setPrescriptionsLoading] = useState(false);
   const [prescriptionsError, setPrescriptionsError] = useState('');
   const [uploadingPrescription, setUploadingPrescription] = useState(false);
+  const [deletingPrescriptionId, setDeletingPrescriptionId] = useState('');
   const prescriptionInputRef = useRef(null);
   const tabs = ['Personal Details', 'Orders', 'Prescriptions', 'Job Card', 'Bills'];
   const [activeTab, setActiveTab] = useState(() => {
@@ -226,6 +227,61 @@ const CustomerProfile = () => {
     return prescription.url.startsWith('http')
       ? prescription.url
       : `http://localhost:4000${prescription.url}`;
+  };
+
+  const handleDownloadPrescription = async (prescription) => {
+    if (!prescription?._id) return;
+    try {
+      const res = await fetch(
+        `http://localhost:4000/api/prescriptions/${prescription._id}/download`,
+        { credentials: 'include' }
+      );
+
+      if (!res.ok) {
+        throw new Error('Failed to download prescription');
+      }
+
+      const blob = await res.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = prescription.originalName || 'prescription';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleDeletePrescription = async (prescription) => {
+    if (!prescription?._id) return;
+
+    const confirmed = window.confirm(
+      `Delete "${prescription.originalName}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingPrescriptionId(prescription._id);
+    try {
+      const res = await fetch(
+        `http://localhost:4000/api/prescriptions/${prescription._id}`,
+        { method: 'DELETE', credentials: 'include' }
+      );
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to delete prescription');
+      }
+
+      setPrescriptions((prev) => prev.filter((item) => item._id !== prescription._id));
+      toast.success('Prescription deleted successfully');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setDeletingPrescriptionId('');
+    }
   };
 
   const formatFileSize = (bytes) => {
@@ -473,15 +529,36 @@ const CustomerProfile = () => {
                           <td>{formatOrderDate(prescription.createdAt)}</td>
                           <td>{formatFileSize(prescription.size)}</td>
                           <td>
-                            <a
-                              className="profile-view-btn"
-                              href={getPrescriptionUrl(prescription)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <ExternalLink size={14} />
-                              View
-                            </a>
+                            <div className="profile-prescription-actions">
+                              <a
+                                className="profile-view-btn"
+                                href={getPrescriptionUrl(prescription)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink size={14} />
+                                View
+                              </a>
+                              <button
+                                type="button"
+                                className="profile-icon-btn profile-icon-download"
+                                onClick={() => handleDownloadPrescription(prescription)}
+                                title="Download prescription"
+                                aria-label={`Download ${prescription.originalName}`}
+                              >
+                                <Download size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                className="profile-icon-btn profile-icon-delete"
+                                onClick={() => handleDeletePrescription(prescription)}
+                                title="Delete prescription"
+                                aria-label={`Delete ${prescription.originalName}`}
+                                disabled={deletingPrescriptionId === prescription._id}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
