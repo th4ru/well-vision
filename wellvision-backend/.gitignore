@@ -13,3 +13,6 @@ npm-debug.log*
 # Temporary scripts
 tmp-*.mjs
 tmp-*.js
+
+# Uploaded files (prescriptions, etc.)
+uploads/

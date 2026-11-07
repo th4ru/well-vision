@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus, ChevronRight, Upload, FileText, ExternalLink } from 'lucide-react';
 import './CustomerProfile.css';
 import { toast } from 'react-toastify';
 
@@ -10,6 +10,10 @@ const CustomerProfile = () => {
   const [searchParams] = useSearchParams();
   const [customer, setCustomer] = useState(null);
   const [prescriptions, setPrescriptions] = useState([]);
+  const [prescriptionsLoading, setPrescriptionsLoading] = useState(false);
+  const [prescriptionsError, setPrescriptionsError] = useState('');
+  const [uploadingPrescription, setUploadingPrescription] = useState(false);
+  const prescriptionInputRef = useRef(null);
   const tabs = ['Personal Details', 'Orders', 'Prescriptions', 'Job Card', 'Bills'];
   const [activeTab, setActiveTab] = useState(() => {
     const requestedTab = searchParams.get('tab');
@@ -91,11 +95,6 @@ const CustomerProfile = () => {
         if (!res.ok) throw new Error(data.message || 'Failed to fetch customer');
 
         setCustomer(data.customer);
-        setPrescriptions([
-          { id: 1, name: 'Prescription 1', description: 'Description', date: '2023-07-01', time: '10:00 AM' },
-          { id: 2, name: 'Prescription 2', description: 'Description', date: '2023-07-05', time: '2:00 PM' },
-          { id: 3, name: 'Prescription 3', description: 'Description', date: '2023-07-10', time: '11:30 AM' },
-        ]);
       } catch (error) {
         toast.error(error.message);
       } finally {
@@ -161,6 +160,80 @@ const CustomerProfile = () => {
 
     fetchOrders();
   }, [customerId]);
+
+  // Fetch this customer's uploaded prescriptions
+  useEffect(() => {
+    if (!customerId) return;
+
+    const fetchPrescriptions = async () => {
+      setPrescriptionsLoading(true);
+      setPrescriptionsError('');
+      try {
+        const res = await fetch(`http://localhost:4000/api/prescriptions/customer/${customerId}`, {
+          credentials: 'include',
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Failed to fetch prescriptions');
+        }
+
+        setPrescriptions(data.prescriptions || []);
+      } catch (error) {
+        setPrescriptionsError(error.message);
+        toast.error(error.message);
+      } finally {
+        setPrescriptionsLoading(false);
+      }
+    };
+
+    fetchPrescriptions();
+  }, [customerId]);
+
+  const handlePrescriptionFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    // Reset so selecting the same file again still triggers a change.
+    event.target.value = '';
+    if (!file) return;
+
+    setUploadingPrescription(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`http://localhost:4000/api/prescriptions/customer/${customerId}`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to upload prescription');
+      }
+
+      setPrescriptions((prev) => [data.prescription, ...prev]);
+      toast.success('Prescription uploaded successfully');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setUploadingPrescription(false);
+    }
+  };
+
+  const getPrescriptionUrl = (prescription) => {
+    if (!prescription?.url) return '#';
+    return prescription.url.startsWith('http')
+      ? prescription.url
+      : `http://localhost:4000${prescription.url}`;
+  };
+
+  const formatFileSize = (bytes) => {
+    const size = Number(bytes) || 0;
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   if (loading) return <div className="loading-message">Loading customer profile...</div>;
   if (!customer) return <div className="error-message">Customer not found.</div>;
@@ -343,30 +416,80 @@ const CustomerProfile = () => {
           )}
 
           {activeTab === 'Prescriptions' && (
-            <table className="profile-prescription-table">
-              <thead>
-                <tr>
-                  <th>Prescription</th>
-                  <th>Description</th>
-                  <th>Date</th>
-                  <th>Time</th>
-                  <th>View</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prescriptions.map((prescription) => (
-                  <tr key={prescription.id}>
-                    <td>{prescription.name}</td>
-                    <td>{prescription.description}</td>
-                    <td>{prescription.date}</td>
-                    <td>{prescription.time}</td>
-                    <td>
-                      <button className="profile-view-btn">View</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="profile-prescriptions-tab">
+              <div className="profile-prescriptions-header">
+                <div>
+                  <h4>Customer Prescriptions</h4>
+                  <p className="profile-orders-subtitle">
+                    Uploaded prescription files for {customer.givenName} {customer.familyName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="profile-add-prescription-btn"
+                  onClick={() => prescriptionInputRef.current?.click()}
+                  disabled={uploadingPrescription}
+                >
+                  <Upload size={16} />
+                  {uploadingPrescription ? 'Uploading...' : 'Add New Prescription'}
+                </button>
+                <input
+                  ref={prescriptionInputRef}
+                  type="file"
+                  className="profile-prescription-file-input"
+                  accept=".pdf,image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handlePrescriptionFileChange}
+                />
+              </div>
+
+              {prescriptionsLoading ? (
+                <p className="profile-job-card-empty">Loading prescriptions...</p>
+              ) : prescriptionsError ? (
+                <p className="profile-job-card-empty">{prescriptionsError}</p>
+              ) : prescriptions.length === 0 ? (
+                <p className="profile-job-card-empty">
+                  No prescriptions uploaded for this customer yet. Use Add New Prescription to upload one.
+                </p>
+              ) : (
+                <div className="profile-prescriptions-table-wrapper">
+                  <table className="profile-prescriptions-table">
+                    <thead>
+                      <tr>
+                        <th>Prescription</th>
+                        <th>Uploaded</th>
+                        <th>Size</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {prescriptions.map((prescription) => (
+                        <tr key={prescription._id || prescription.fileName}>
+                          <td>
+                            <span className="profile-prescription-file">
+                              <FileText size={16} />
+                              {prescription.originalName}
+                            </span>
+                          </td>
+                          <td>{formatOrderDate(prescription.createdAt)}</td>
+                          <td>{formatFileSize(prescription.size)}</td>
+                          <td>
+                            <a
+                              className="profile-view-btn"
+                              href={getPrescriptionUrl(prescription)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink size={14} />
+                              View
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           )}
 
           {activeTab === 'Orders' && (
