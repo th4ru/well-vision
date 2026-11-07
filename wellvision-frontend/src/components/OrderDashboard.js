@@ -11,7 +11,8 @@ import {
   X,
   Eye,
   Package,
-  ShoppingCart
+  ShoppingCart,
+  ArrowLeft
 } from 'lucide-react';
 
 const DEFAULT_ORDER_FORM = {
@@ -459,6 +460,18 @@ function Orders() {
       <SidebarMenu active="orders" />
       
       <div className="orders-main-content">
+        <div className="page-back-bar">
+          <button
+            type="button"
+            className="page-back-btn"
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/dashboard'))}
+            aria-label="Go back"
+          >
+            <ArrowLeft size={18} />
+            Back
+          </button>
+        </div>
+
         {/* Header */}
         <div className="orders-header">
           <div className="orders-header-content">

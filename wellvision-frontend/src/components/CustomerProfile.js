@@ -567,57 +567,99 @@ const CustomerProfile = () => {
 
           {activeTab === 'Bills' && (
             <div className="profile-bills-tab">
-              <h4>Customer Bills</h4>
+              <div className="profile-bills-header">
+                <div>
+                  <h4>Customer Bills</h4>
+                  <p className="profile-orders-subtitle">
+                    Bills created from this customer's orders and payments
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="profile-view-all-btn"
+                  onClick={() => navigate('/bills')}
+                >
+                  View All Bills
+                </button>
+              </div>
+
               {invoicesLoading ? (
-                <p>Loading bills...</p>
+                <p className="profile-job-card-empty">Loading bills...</p>
               ) : invoices.length === 0 ? (
-                <p>No bills found for this customer yet.</p>
+                <p className="profile-job-card-empty">
+                  No bills found for this customer yet.
+                </p>
               ) : (
-                <table className="profile-invoices-table">
-                  <thead>
-                    <tr>
-                      <th>Bill No</th>
-                      <th>Order No</th>
-                      <th>Date</th>
-                      <th>Items</th>
-                      <th>Amount</th>
-                      <th>Advance</th>
-                      <th>Balance</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invoices.map((inv) => (
-                      <tr key={inv._id}>
-                        <td>{inv.billNo}</td>
-                        <td>{inv.orderNo}</td>
-                        <td>{inv.date ? new Date(inv.date).toLocaleString() : ''}</td>
-                        <td>{inv.items && inv.items.length > 0 ? inv.items.map(item => item.item).join(', ') : 'N/A'}</td>
-                        <td>{inv.amount}</td>
-                        <td>{inv.advance}</td>
-                        <td>{inv.balance}</td>
-                        <td>
-                          <div className="action-buttons">
-                            <button
-                              className="action-btn view-btn"
-                              onClick={() => navigate(`/invoice?view=${inv._id}&customerId=${customerId}`)}
-                              title="View Invoice"
-                            >
-                              View
-                            </button>
-                            <button
-                              className="action-btn edit-btn"
-                              onClick={() => navigate(`/invoice?edit=${inv._id}&customerId=${customerId}`)}
-                              title="Edit Invoice"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        </td>
+                <div className="profile-bills-table-wrapper">
+                  <table className="profile-bills-table">
+                    <thead>
+                      <tr>
+                        <th>Bill No</th>
+                        <th>Order No</th>
+                        <th>Date</th>
+                        <th>Items</th>
+                        <th>Amount</th>
+                        <th>Advance</th>
+                        <th>Balance</th>
+                        <th>Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {invoices.map((inv) => {
+                        const balance = Number(inv.balance) || 0;
+                        return (
+                          <tr key={inv._id}>
+                            <td>
+                              <span className="profile-order-number">
+                                {inv.billNo}
+                              </span>
+                            </td>
+                            <td>{inv.orderNo}</td>
+                            <td>{inv.date ? new Date(inv.date).toLocaleString() : ''}</td>
+                            <td className="profile-order-items">
+                              {inv.items && inv.items.length > 0
+                                ? inv.items.map((item) => item.item).join(', ')
+                                : 'N/A'}
+                            </td>
+                            <td className="profile-order-total">
+                              Rs. {Number(inv.amount || 0).toLocaleString()}
+                            </td>
+                            <td>Rs. {Number(inv.advance || 0).toLocaleString()}</td>
+                            <td>
+                              <span
+                                className={
+                                  balance > 0
+                                    ? 'profile-order-due'
+                                    : 'profile-order-settled'
+                                }
+                              >
+                                Rs. {balance.toLocaleString()}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="action-buttons">
+                                <button
+                                  className="action-btn view-btn"
+                                  onClick={() => navigate(`/invoice?view=${inv._id}&customerId=${customerId}`)}
+                                  title="View Invoice"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  className="action-btn edit-btn"
+                                  onClick={() => navigate(`/invoice?edit=${inv._id}&customerId=${customerId}`)}
+                                  title="Edit Invoice"
+                                >
+                                  Edit
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}
