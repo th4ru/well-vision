@@ -6,7 +6,8 @@ import Invoice from '../models/invoiceModel.js';
 import userModel from '../models/userModel.js';
 
 // Older invoices predate the createdBy field. Attribute them to the earliest
-// admin account so the report has a real owner instead of a fake row.
+// staff account instead of an administrator: administrators review sales,
+// they do not make them.
 export const backfillInvoiceCreators = async () => {
   const missingFilter = {
     $or: [{ createdBy: { $exists: false } }, { createdBy: null }],
@@ -15,21 +16,19 @@ export const backfillInvoiceCreators = async () => {
   const missing = await Invoice.countDocuments(missingFilter);
   if (!missing) return 0;
 
-  const admin = await userModel
+  const staff = await userModel
     .findOne({
-      $or: [
-        { role: { $regex: '^admin$', $options: 'i' } },
-        { email: 'admin@example.com' },
-      ],
+      role: { $not: /^admin$/i },
+      staffId: { $exists: true, $ne: '' },
     })
     .sort({ createdAt: 1 })
     .select('_id')
     .lean();
 
-  if (!admin) return 0;
+  if (!staff) return 0;
 
   const result = await Invoice.updateMany(missingFilter, {
-    $set: { createdBy: admin._id },
+    $set: { createdBy: staff._id },
   });
 
   return result.modifiedCount || 0;
