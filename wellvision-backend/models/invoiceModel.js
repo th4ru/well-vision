@@ -24,6 +24,8 @@ const invoiceSchema = new mongoose.Schema({
   address: { type: String, required: true },
   // Optional link back to the customer this invoice belongs to
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: false },
+  // Staff account that created this sale. Used by the Performance report.
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
   items: [itemSchema],
   amount: { type: Number, required: true },
   advance: { type: Number, required: true },

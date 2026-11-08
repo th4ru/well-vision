@@ -73,6 +73,8 @@ export const createInvoice = async (req, res) => {
       advance: Number(req.body.advance),
       balance: Number(req.body.balance),
       items: normalizedItems,
+      // Always record the signed-in staff account, never a client-supplied id.
+      createdBy: userId,
     };
 
     const invoice = new InvoiceModel(invoiceData);
@@ -150,6 +152,9 @@ export const updateInvoice = async (req, res) => {
       balance: Number(req.body.balance),
       items: normalizedItems,
     };
+
+    // The creator is audit history and must not be changed by an edit.
+    delete updateData.createdBy;
 
     const invoice = await InvoiceModel.findByIdAndUpdate(id, updateData, { new: true });
     if (!invoice) {

@@ -22,6 +22,8 @@ const orderSchema = new mongoose.Schema({
   collected: { type: Boolean, default: false },
   total: { type: Number, required: true, default: 0 },
   amountGiven: { type: Number, default: 0 },
+  // Staff account that created this order. Used by the Performance report.
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
   placedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 

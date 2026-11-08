@@ -22,6 +22,7 @@ import {
   ensureStaffProfiles,
   removeLegacyStaffSeeds,
 } from './utils/staffProfile.js';
+import { backfillInvoiceCreators } from './utils/performance.js';
 
 // Load .env colocated with this file, regardless of process.cwd()
 const __filename = fileURLToPath(import.meta.url);
@@ -78,8 +79,9 @@ mongoose.connect(mongoUri).then(async () => {
   try {
     await removeLegacyStaffSeeds();
     await ensureStaffProfiles();
+    await backfillInvoiceCreators();
   } catch (error) {
-    console.error('Staff profile sync failed:', error.message);
+    console.error('Startup data sync failed:', error.message);
   }
 
   app.listen(PORT, () => {

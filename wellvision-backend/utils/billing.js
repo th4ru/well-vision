@@ -60,6 +60,7 @@ export const createBillForOrder = async (order, customer, userId) => {
     tel: customer.phoneNo,
     address: customer.address,
     customerId: customer._id,
+    createdBy: userId || null,
     items: (order.items || []).map((item) => ({
       item: item.description || item.sku || 'Item',
       description: item.sku ? `SKU: ${item.sku}` : '',

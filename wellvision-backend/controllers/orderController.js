@@ -369,7 +369,8 @@ export const createOrder = async (req, res) => {
         items,
         status,
         total,
-        amountGiven: Number(amountGiven) || 0
+        amountGiven: Number(amountGiven) || 0,
+        createdBy: req.user?.id || null
       }], { session });
 
       // Update product stock

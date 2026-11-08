@@ -8,6 +8,7 @@ import Customer from '../models/customer.js';
 import InvoiceModel from '../models/invoiceModel.js';
 import Product from '../models/productModel.js';
 import userModel from '../models/userModel.js';
+import { buildStaffPerformance } from '../utils/performance.js';
 
 const MONTHS = [
   'January',
@@ -173,6 +174,18 @@ export const getSales = async (req, res) => {
     });
   } catch (error) {
     console.error('GET /sales/sales error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// GET /api/admin/management/performance
+// Real per-staff sales performance, attributed through invoice.createdBy.
+export const getStaffPerformance = async (req, res) => {
+  try {
+    const performance = await buildStaffPerformance();
+    return res.json(performance);
+  } catch (error) {
+    console.error('GET /management/performance error:', error.message);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

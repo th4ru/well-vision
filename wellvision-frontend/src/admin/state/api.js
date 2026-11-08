@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { mockUserData, mockTransactionsData, mockGeographyData, mockPerformanceData, mockAdminsData } from "../data/mockData";
+import { mockUserData, mockTransactionsData, mockGeographyData, mockAdminsData } from "../data/mockData";
 
 // Endpoints that are backed by real database data. They must surface errors
 // instead of silently falling back to mock data.
@@ -10,6 +10,7 @@ const REAL_GET_ENDPOINTS = new Set([
   "client/customers",
   "client/products",
   "management/admins",
+  "management/performance",
   "staff",
 ]);
 
@@ -66,8 +67,6 @@ const getMockData = (args) => {
     return { data: mockGeographyData };
   } else if (endpoint === 'client/transactions') {
     return { data: mockTransactionsData };
-  } else if (endpoint && endpoint.startsWith('management/performance/')) {
-    return { data: mockPerformanceData };
   } else if (endpoint === 'management/admins') {
     return { data: mockAdminsData };
   } else if (endpoint && endpoint.startsWith('general/user/')) {
@@ -207,8 +206,8 @@ export const api = createApi({
       }),
       invalidatesTags: ["Staff"],
     }),
-    getUserPerformance: build.query({
-      query: (id) => `management/performance/${id}`,
+    getStaffPerformance: build.query({
+      query: () => "management/performance",
       providesTags: ["Performance"],
     }),
     getDashboard: build.query({
@@ -238,6 +237,6 @@ export const {
   useGetStaffStatsQuery,
   useLookupStaffAccessMutation,
   useUpdateStaffAccessMutation,
-  useGetUserPerformanceQuery,
+  useGetStaffPerformanceQuery,
   useGetDashboardQuery,
 } = api;

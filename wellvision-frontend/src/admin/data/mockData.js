@@ -232,34 +232,6 @@ export const mockGeographyData = [
   }
 ];
 
-export const mockPerformanceData = {
-  sales: [
-    {
-      _id: "63701cc1f03239b7f700004a",
-      userId: "admin-id-placeholder",
-      createdAt: "2024-01-15T10:30:00Z",
-      products: ["product1", "product2"],
-      cost: 299.99
-    },
-    {
-      _id: "63701cc1f03239b7f700004b",
-      userId: "admin-id-placeholder", 
-      createdAt: "2024-01-14T14:20:00Z",
-      products: ["product3", "product4", "product5"],
-      cost: 549.97
-    },
-    {
-      _id: "63701cc1f03239b7f700004c",
-      userId: "admin-id-placeholder",
-      createdAt: "2024-01-13T09:15:00Z",
-      products: ["product1"],
-      cost: 149.99
-    }
-  ],
-  totalSales: 999.95,
-  totalUnits: 6
-};
-
 export const mockAdminsData = [
   {
     _id: "admin-id-placeholder",

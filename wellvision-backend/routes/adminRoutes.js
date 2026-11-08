@@ -12,6 +12,7 @@ import {
   getCurrentUser,
   getDashboard,
   getSales,
+  getStaffPerformance,
   updateCurrentUser,
 } from '../controllers/dashboardController.js';
 import {
@@ -54,6 +55,7 @@ router.get('/general/dashboard', userAuth, adminOnly, getDashboard);
 router.get('/general/me', userAuth, getCurrentUser);
 router.put('/general/me', userAuth, updateCurrentUser);
 router.get('/sales/sales', userAuth, adminOnly, getSales);
+router.get('/management/performance', userAuth, adminOnly, getStaffPerformance);
 router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
 router.get('/client/products', userAuth, adminOnly, getAdminProducts);
 router.post('/client/products', userAuth, adminOnly, createAdminProduct);
