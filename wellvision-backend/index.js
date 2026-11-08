@@ -18,7 +18,10 @@ import productRoutes from './routes/productRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import prescriptionRoutes from './routes/prescriptionRoutes.js';
-import { seedStaff } from './utils/seedStaff.js';
+import {
+  ensureStaffProfiles,
+  removeLegacyStaffSeeds,
+} from './utils/staffProfile.js';
 
 // Load .env colocated with this file, regardless of process.cwd()
 const __filename = fileURLToPath(import.meta.url);
@@ -70,12 +73,13 @@ const mongoUri = (process.env.MONGODB_URI || '').toString().trim().replace(/^['"
 
 mongoose.connect(mongoUri).then(async () => {
   console.log('✅ MongoDB Connected');
-  // Seed the original staff directory once so the Staff and Configuration
-  // pages have records to work with.
+  // Keep the Staff directory in sync with the real user accounts and remove
+  // any demo employees left behind by the old seeder.
   try {
-    await seedStaff();
+    await removeLegacyStaffSeeds();
+    await ensureStaffProfiles();
   } catch (error) {
-    console.error('Staff seed failed:', error.message);
+    console.error('Staff profile sync failed:', error.message);
   }
 
   app.listen(PORT, () => {

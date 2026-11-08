@@ -116,6 +116,17 @@ const Staff = () => {
   const [updateStaff] = useUpdateStaffMutation();
   const [deleteStaff] = useDeleteStaffMutation();
 
+  // Build the role list from the roles that actually exist in the database,
+  // while keeping the standard staff roles available for new members.
+  const roleOptions = useMemo(() => {
+    const baseRoles = ["Admin", "Manager", "Supervisor", "Employee"];
+    const databaseRoles = staffRows
+      .map((member) => member.role)
+      .filter((role) => role && !baseRoles.includes(role));
+
+    return [...baseRoles, ...Array.from(new Set(databaseRoles))];
+  }, [staffRows]);
+
   // Handle search
   const handleSearch = () => {
     setSearch(searchInput.trim());
@@ -133,9 +144,17 @@ const Staff = () => {
     e.preventDefault();
     try {
       if (openAddModal) {
-        // Do not send password on create; backend assigns default
-        const { password, ...payload } = formData;
-        await createStaff(payload).unwrap();
+        if (!formData.password || formData.password.length < 8) {
+          setNotification({
+            open: true,
+            message: "Password must be at least 8 characters",
+            severity: "error",
+          });
+          return;
+        }
+        // The staff directory is backed by real user accounts, so a password
+        // is required when creating a new staff member.
+        await createStaff(formData).unwrap();
         setNotification({
           open: true,
           message: "Staff member created successfully!",
@@ -495,25 +514,34 @@ const Staff = () => {
                 />
               </Grid>
 
-              {openEditModal && (
-                <Grid item xs={12}>
-                  <TextField
-                    name="password"
-                    label="New Password (leave blank to keep current)"
-                    type="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    fullWidth
-                    size="small"
-                    autoComplete="new-password"
-                    InputProps={{ startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock />
-                      </InputAdornment>
-                    )}}
-                  />
-                </Grid>
-              )}
+              <Grid item xs={12}>
+                <TextField
+                  name="password"
+                  label={
+                    openAddModal
+                      ? "Password"
+                      : "New Password (leave blank to keep current)"
+                  }
+                  type="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required={openAddModal}
+                  fullWidth
+                  size="small"
+                  autoComplete="new-password"
+                  inputProps={{ minLength: 8 }}
+                  helperText={
+                    openAddModal
+                      ? "At least 8 characters. This is the staff member's login password."
+                      : "Only fill this in to change the password."
+                  }
+                  InputProps={{ startAdornment: (
+                    <InputAdornment position="start">
+                      <Lock />
+                    </InputAdornment>
+                  )}}
+                />
+              </Grid>
 
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
@@ -524,10 +552,11 @@ const Staff = () => {
                     onChange={handleInputChange}
                     label="Role"
                   >
-                    <MenuItem value="Admin">Admin</MenuItem>
-                    <MenuItem value="Manager">Manager</MenuItem>
-                    <MenuItem value="Supervisor">Supervisor</MenuItem>
-                    <MenuItem value="Employee">Employee</MenuItem>
+                    {roleOptions.map((role) => (
+                      <MenuItem key={role} value={role}>
+                        {role}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>

@@ -1,49 +1,50 @@
 // controllers/staffController.js
 // Staff directory endpoints used by the admin Staff page and the Configuration
-// page. Every route is mounted behind userAuth + adminOnly.
-import Staff, { STAFF_ROLES, STAFF_STATUSES } from '../models/staffModel.js';
+// page. The directory is backed by the real user accounts collection, so the
+// Staff page always shows actual database records. Every route is mounted
+// behind userAuth + adminOnly.
+import bcrypt from 'bcryptjs';
+import userModel from '../models/userModel.js';
+import { sanitizeAccess } from '../config/accessModules.js';
 import {
-  DEFAULT_ACCESS_BY_ROLE,
-  sanitizeAccess,
-} from '../config/accessModules.js';
+  DEFAULT_STAFF_ROLE,
+  STAFF_STATUSES,
+  ensureStaffProfile,
+  ensureStaffProfiles,
+  nextStaffId,
+  normalizeAccess,
+} from '../utils/staffProfile.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\+?[0-9\s-]{7,15}$/;
+const ROLE_REGEX = /^[A-Za-z][A-Za-z\s-]{1,39}$/;
 
 const normalizeName = (value) =>
   (value || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
 
-const toStaffResponse = (staff) => ({
-  _id: staff._id,
-  staffId: staff.staffId,
-  name: staff.name,
-  email: staff.email,
-  phoneNumber: staff.phoneNumber || '',
-  role: staff.role,
-  status: staff.status,
-  department: staff.department || '',
-  hireDate: staff.hireDate,
-  access: Array.isArray(staff.access) ? staff.access : [],
-  createdAt: staff.createdAt,
-  updatedAt: staff.updatedAt,
+const toStaffResponse = (user) => ({
+  _id: user._id,
+  staffId: user.staffId || '',
+  name: user.name,
+  email: user.email,
+  phoneNumber: user.phone || '',
+  role: user.role || DEFAULT_STAFF_ROLE,
+  status: user.staffStatus || 'Active',
+  department: user.department || '',
+  hireDate: user.createdAt,
+  access: Array.isArray(user.access) ? user.access : [],
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
 });
 
-const nextStaffId = async () => {
-  const existing = await Staff.find({ staffId: /^STF\d+$/ })
-    .select('staffId')
-    .lean();
-
-  const highest = existing.reduce((max, item) => {
-    const number = parseInt(item.staffId.replace(/\D/g, ''), 10);
-    return Number.isFinite(number) && number > max ? number : max;
-  }, 0);
-
-  return `STF${String(highest + 1).padStart(4, '0')}`;
-};
+const validateRole = (role) => ROLE_REGEX.test(role);
 
 // GET /api/admin/staff
 export const getStaff = async (req, res) => {
   try {
+    // Make sure every real account has a staff profile before listing.
+    await ensureStaffProfiles();
+
     const search = (req.query.search || '').toString().trim();
     const filter = search
       ? {
@@ -52,14 +53,18 @@ export const getStaff = async (req, res) => {
             { name: { $regex: search, $options: 'i' } },
             { email: { $regex: search, $options: 'i' } },
             { role: { $regex: search, $options: 'i' } },
-            { status: { $regex: search, $options: 'i' } },
+            { staffStatus: { $regex: search, $options: 'i' } },
             { department: { $regex: search, $options: 'i' } },
-            { phoneNumber: { $regex: search, $options: 'i' } },
+            { phone: { $regex: search, $options: 'i' } },
           ],
         }
       : {};
 
-    const staff = await Staff.find(filter).sort({ createdAt: 1, staffId: 1 }).lean();
+    const staff = await userModel
+      .find(filter)
+      .select('name email phone role staffId staffStatus department access createdAt updatedAt')
+      .sort({ createdAt: 1 })
+      .lean();
 
     return res.json({
       staff: staff.map(toStaffResponse),
@@ -76,11 +81,12 @@ export const getStaff = async (req, res) => {
 // GET /api/admin/staff/:id
 export const getStaffById = async (req, res) => {
   try {
-    const staff = await Staff.findById(req.params.id);
-    if (!staff) {
+    const user = await userModel.findById(req.params.id);
+    if (!user) {
       return res.status(404).json({ success: false, message: 'Staff member not found' });
     }
-    return res.json({ success: true, staff: toStaffResponse(staff) });
+    await ensureStaffProfile(user);
+    return res.json({ success: true, staff: toStaffResponse(user) });
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(404).json({ success: false, message: 'Staff member not found' });
@@ -94,10 +100,11 @@ export const getStaffById = async (req, res) => {
 export const createStaff = async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
-  const phoneNumber = (req.body.phoneNumber || '').trim();
-  const role = (req.body.role || 'Employee').trim();
-  const status = (req.body.status || 'Active').trim();
+  const phone = (req.body.phoneNumber || req.body.phone || '').trim();
+  const role = (req.body.role || DEFAULT_STAFF_ROLE).trim();
+  const status = (req.body.status || req.body.staffStatus || 'Active').trim();
   const department = (req.body.department || '').trim();
+  const password = req.body.password || '';
 
   if (!name || !email) {
     return res.status(400).json({
@@ -108,14 +115,11 @@ export const createStaff = async (req, res) => {
   if (!EMAIL_REGEX.test(email)) {
     return res.status(400).json({ success: false, message: 'Invalid email format' });
   }
-  if (phoneNumber && !PHONE_REGEX.test(phoneNumber)) {
+  if (phone && !PHONE_REGEX.test(phone)) {
     return res.status(400).json({ success: false, message: 'Invalid phone format' });
   }
-  if (!STAFF_ROLES.includes(role)) {
-    return res.status(400).json({
-      success: false,
-      message: `Role must be one of: ${STAFF_ROLES.join(', ')}`,
-    });
+  if (!validateRole(role)) {
+    return res.status(400).json({ success: false, message: 'Invalid role' });
   }
   if (!STAFF_STATUSES.includes(status)) {
     return res.status(400).json({
@@ -123,24 +127,39 @@ export const createStaff = async (req, res) => {
       message: `Status must be one of: ${STAFF_STATUSES.join(', ')}`,
     });
   }
+  if (!password || password.length < 8) {
+    return res.status(400).json({
+      success: false,
+      message: 'Password must be at least 8 characters',
+    });
+  }
 
   try {
-    const staff = await Staff.create({
-      staffId: await nextStaffId(),
+    const existing = await userModel.findOne({ email }).select('_id');
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message: 'A staff member with this email already exists',
+      });
+    }
+
+    const user = await userModel.create({
       name,
       email,
-      phoneNumber,
+      phone,
+      password: await bcrypt.hash(password, 10),
       role,
-      status,
+      staffId: await nextStaffId(),
+      staffStatus: status,
       department,
-      access: sanitizeAccess(
-        req.body.access || DEFAULT_ACCESS_BY_ROLE[role] || []
-      ),
+      access: normalizeAccess(req.body.access, role),
+      // Staff accounts created by an admin do not need email verification.
+      isAccountVerified: true,
     });
 
     return res.status(201).json({
       success: true,
-      staff: toStaffResponse(staff),
+      staff: toStaffResponse(user),
       message: 'Staff member created successfully',
     });
   } catch (error) {
@@ -160,73 +179,80 @@ export const createStaff = async (req, res) => {
 
 // PUT /api/admin/staff/:id
 export const updateStaff = async (req, res) => {
-  const updates = {};
-
-  if (req.body.name !== undefined) {
-    const name = (req.body.name || '').trim();
-    if (!name) {
-      return res.status(400).json({ success: false, message: 'Full name is required' });
-    }
-    updates.name = name;
-  }
-
-  if (req.body.email !== undefined) {
-    const email = (req.body.email || '').trim().toLowerCase();
-    if (!EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ success: false, message: 'Invalid email format' });
-    }
-    updates.email = email;
-  }
-
-  if (req.body.phoneNumber !== undefined) {
-    const phoneNumber = (req.body.phoneNumber || '').trim();
-    if (phoneNumber && !PHONE_REGEX.test(phoneNumber)) {
-      return res.status(400).json({ success: false, message: 'Invalid phone format' });
-    }
-    updates.phoneNumber = phoneNumber;
-  }
-
-  if (req.body.role !== undefined) {
-    if (!STAFF_ROLES.includes(req.body.role)) {
-      return res.status(400).json({
-        success: false,
-        message: `Role must be one of: ${STAFF_ROLES.join(', ')}`,
-      });
-    }
-    updates.role = req.body.role;
-  }
-
-  if (req.body.status !== undefined) {
-    if (!STAFF_STATUSES.includes(req.body.status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Status must be one of: ${STAFF_STATUSES.join(', ')}`,
-      });
-    }
-    updates.status = req.body.status;
-  }
-
-  if (req.body.department !== undefined) {
-    updates.department = (req.body.department || '').trim();
-  }
-
-  if (req.body.access !== undefined) {
-    updates.access = sanitizeAccess(req.body.access);
-  }
-
   try {
-    const staff = await Staff.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!staff) {
+    const user = await userModel.findById(req.params.id);
+    if (!user) {
       return res.status(404).json({ success: false, message: 'Staff member not found' });
     }
 
+    if (req.body.name !== undefined) {
+      const name = (req.body.name || '').trim();
+      if (!name) {
+        return res.status(400).json({ success: false, message: 'Full name is required' });
+      }
+      user.name = name;
+    }
+
+    if (req.body.email !== undefined) {
+      const email = (req.body.email || '').trim().toLowerCase();
+      if (!EMAIL_REGEX.test(email)) {
+        return res.status(400).json({ success: false, message: 'Invalid email format' });
+      }
+      user.email = email;
+    }
+
+    if (req.body.phoneNumber !== undefined || req.body.phone !== undefined) {
+      const phone = (req.body.phoneNumber ?? req.body.phone ?? '').trim();
+      if (phone && !PHONE_REGEX.test(phone)) {
+        return res.status(400).json({ success: false, message: 'Invalid phone format' });
+      }
+      user.phone = phone;
+    }
+
+    if (req.body.role !== undefined) {
+      const role = (req.body.role || '').trim();
+      if (!validateRole(role)) {
+        return res.status(400).json({ success: false, message: 'Invalid role' });
+      }
+      user.role = role;
+    }
+
+    if (req.body.status !== undefined || req.body.staffStatus !== undefined) {
+      const status = (req.body.status ?? req.body.staffStatus ?? '').trim();
+      if (!STAFF_STATUSES.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Status must be one of: ${STAFF_STATUSES.join(', ')}`,
+        });
+      }
+      user.staffStatus = status;
+    }
+
+    if (req.body.department !== undefined) {
+      user.department = (req.body.department || '').trim();
+    }
+
+    if (req.body.access !== undefined) {
+      user.access = sanitizeAccess(req.body.access);
+    }
+
+    if (req.body.password !== undefined && req.body.password !== '') {
+      if (req.body.password.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password must be at least 8 characters',
+        });
+      }
+      user.password = await bcrypt.hash(req.body.password, 10);
+      user.passwordChangedAt = new Date();
+    }
+
+    await ensureStaffProfile(user);
+    await user.save();
+
     return res.json({
       success: true,
-      staff: toStaffResponse(staff),
+      staff: toStaffResponse(user),
       message: 'Staff member updated successfully',
     });
   } catch (error) {
@@ -250,8 +276,16 @@ export const updateStaff = async (req, res) => {
 // DELETE /api/admin/staff/:id
 export const deleteStaff = async (req, res) => {
   try {
-    const staff = await Staff.findByIdAndDelete(req.params.id);
-    if (!staff) {
+    // Never let an admin delete the account they are currently signed in with.
+    if (req.user && String(req.user.id) === String(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot delete your own account',
+      });
+    }
+
+    const user = await userModel.findByIdAndDelete(req.params.id);
+    if (!user) {
       return res.status(404).json({ success: false, message: 'Staff member not found' });
     }
     return res.json({ success: true, message: 'Staff member deleted successfully' });
@@ -278,18 +312,20 @@ export const lookupStaffAccess = async (req, res) => {
   }
 
   try {
-    const staff = await Staff.findOne({
+    await ensureStaffProfiles();
+
+    const user = await userModel.findOne({
       staffId: staffId.toUpperCase(),
     });
 
-    if (!staff || normalizeName(staff.name) !== normalizeName(name)) {
+    if (!user || normalizeName(user.name) !== normalizeName(name)) {
       return res.status(404).json({
         success: false,
         message: 'No staff member found with that Staff ID and full name',
       });
     }
 
-    return res.json({ success: true, staff: toStaffResponse(staff) });
+    return res.json({ success: true, staff: toStaffResponse(user) });
   } catch (error) {
     console.error('POST /staff/lookup error:', error.message);
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -307,17 +343,17 @@ export const updateStaffAccess = async (req, res) => {
   }
 
   try {
-    const staff = await Staff.findById(req.params.id);
-    if (!staff) {
+    const user = await userModel.findById(req.params.id);
+    if (!user) {
       return res.status(404).json({ success: false, message: 'Staff member not found' });
     }
 
-    staff.access = sanitizeAccess(req.body.access);
-    await staff.save();
+    user.access = sanitizeAccess(req.body.access);
+    await user.save();
 
     return res.json({
       success: true,
-      staff: toStaffResponse(staff),
+      staff: toStaffResponse(user),
       message: 'Access updated successfully',
     });
   } catch (error) {

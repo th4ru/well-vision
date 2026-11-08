@@ -25,6 +25,18 @@ const userSchema = new mongoose.Schema({
 
   role: { type: String, default: 'User' },
 
+  // Staff directory metadata used by the admin Staff and Configuration pages.
+  // The staff directory is backed by the real user accounts in this collection
+  // instead of a separate mock/staff-only collection.
+  staffId: { type: String, unique: true, sparse: true, trim: true },
+  staffStatus: {
+    type: String,
+    enum: ['Active', 'Inactive'],
+    default: 'Active',
+  },
+  department: { type: String, default: '', trim: true },
+  access: { type: [String], default: [] },
+
   // Persist per-user application settings (appearance, invoice, etc.)
   settings: { type: mongoose.Schema.Types.Mixed, default: {} },
 
