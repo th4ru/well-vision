@@ -83,7 +83,19 @@ export const ensureStaffProfile = async (user) => {
 export const ensureStaffProfiles = async () => {
   const users = await userModel.find({});
   for (const user of users) {
-    await ensureStaffProfile(user);
+    try {
+      await ensureStaffProfile(user);
+    } catch (error) {
+      // A user can be deleted while this startup sync is still saving it
+      // (for example during cleanup). Skip that stale document instead of
+      // aborting the whole staff profile sync.
+      if (
+        error?.name !== 'VersionError' &&
+        error?.name !== 'DocumentNotFoundError'
+      ) {
+        throw error;
+      }
+    }
   }
 };
 
