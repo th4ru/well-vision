@@ -6,6 +6,7 @@
 // Customers come from the same collection used by the customer page.
 import Customer from '../models/customer.js';
 import InvoiceModel from '../models/invoiceModel.js';
+import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import userModel from '../models/userModel.js';
 import { buildStaffPerformance } from '../utils/performance.js';
@@ -494,6 +495,154 @@ export const updateCurrentUser = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Email already in use' });
     }
     console.error('PUT /general/me error:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// GET /api/admin/client/transactions
+// Real transaction history built from orders, enriched with the matching bill
+// balance and the staff member who created the sale.
+export const getAdminTransactions = async (req, res) => {
+  try {
+    const page = Math.max(0, Number.parseInt(req.query.page, 10) || 0);
+    const pageSize = Math.min(
+      200,
+      Math.max(1, Number.parseInt(req.query.pageSize, 10) || 20)
+    );
+    const search = (req.query.search || '').trim().toLowerCase();
+
+    let sortField = '';
+    let sortDirection = 'desc';
+    if (req.query.sort) {
+      try {
+        const parsed = JSON.parse(req.query.sort);
+        const entry = Array.isArray(parsed) ? parsed[0] : parsed;
+        if (entry && entry.field) {
+          sortField = entry.field;
+          sortDirection = entry.sort === 'asc' ? 'asc' : 'desc';
+        }
+      } catch {
+        // Ignore malformed sort parameters and keep the default order.
+      }
+    }
+
+    const [orders, invoices] = await Promise.all([
+      Order.find({}).sort({ placedAt: -1 }).lean(),
+      InvoiceModel.find({})
+        .select('orderNo billNo amount advance balance createdBy status date')
+        .lean(),
+    ]);
+
+    const invoiceByOrder = new Map();
+    invoices.forEach((invoice) => {
+      if (invoice.orderNo) invoiceByOrder.set(invoice.orderNo, invoice);
+    });
+
+    const creatorIds = new Set();
+    orders.forEach((order) => {
+      if (order.createdBy) creatorIds.add(String(order.createdBy));
+      const invoice = invoiceByOrder.get(order.orderNumber);
+      if (invoice?.createdBy) creatorIds.add(String(invoice.createdBy));
+    });
+
+    const creators = creatorIds.size
+      ? await userModel
+          .find({ _id: { $in: [...creatorIds] } })
+          .select('name email staffId role')
+          .lean()
+      : [];
+    const creatorById = new Map(
+      creators.map((user) => [String(user._id), user])
+    );
+
+    let transactions = orders.map((order) => {
+      const invoice = invoiceByOrder.get(order.orderNumber);
+      const creator =
+        (order.createdBy && creatorById.get(String(order.createdBy))) ||
+        (invoice?.createdBy && creatorById.get(String(invoice.createdBy))) ||
+        null;
+
+      const total = toNumber(order.total);
+      const amountGiven = toNumber(order.amountGiven);
+      // Orders without a bill fall back to the same due-balance rule used by
+      // the staff Orders page.
+      const fallbackBalance =
+        order.status === 'Customer Collected' && amountGiven <= 0
+          ? 0
+          : Math.max(total - amountGiven, 0);
+      const balance = invoice ? toNumber(invoice.balance) : fallbackBalance;
+
+      const items = (order.items || []).map((item) => {
+        const quantity = toNumber(item.quantity);
+        const unitPrice = toNumber(item.unitPrice);
+        return {
+          description: item.description || item.sku || 'Item',
+          sku: item.sku || '',
+          quantity,
+          unitPrice,
+          lineTotal: quantity * unitPrice,
+        };
+      });
+
+      return {
+        _id: String(order._id),
+        orderNumber: order.orderNumber,
+        billNo: invoice?.billNo || '',
+        staffId: creator?.staffId || '—',
+        staffName: creator?.name || '—',
+        customerName: order.customerName || invoice?.name || '—',
+        orderDate: order.placedAt || order.createdAt || invoice?.date || null,
+        total,
+        paid: Math.max(total - balance, 0),
+        balance,
+        status: order.status,
+        items,
+        products: items.map((item) => item.description),
+      };
+    });
+
+    if (search) {
+      transactions = transactions.filter((transaction) =>
+        [
+          transaction.orderNumber,
+          transaction.billNo,
+          transaction.staffId,
+          transaction.staffName,
+          transaction.customerName,
+          transaction.status,
+          ...transaction.products,
+        ].some((value) =>
+          String(value || '').toLowerCase().includes(search)
+        )
+      );
+    }
+
+    if (sortField) {
+      const direction = sortDirection === 'asc' ? 1 : -1;
+      transactions.sort((a, b) => {
+        if (sortField === 'orderDate') {
+          const aTime = new Date(a.orderDate).getTime() || 0;
+          const bTime = new Date(b.orderDate).getTime() || 0;
+          return (aTime - bTime) * direction;
+        }
+        const aValue = a[sortField];
+        const bValue = b[sortField];
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return (aValue - bValue) * direction;
+        }
+        return (
+          String(aValue ?? '').localeCompare(String(bValue ?? '')) * direction
+        );
+      });
+    }
+
+    const total = transactions.length;
+    const start = page * pageSize;
+    const paged = transactions.slice(start, start + pageSize);
+
+    return res.json({ transactions: paged, total });
+  } catch (error) {
+    console.error('GET /client/transactions error:', error.message);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

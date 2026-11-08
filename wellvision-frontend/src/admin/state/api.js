@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { mockUserData, mockTransactionsData, mockGeographyData, mockAdminsData } from "../data/mockData";
+import { mockUserData, mockGeographyData, mockAdminsData } from "../data/mockData";
 
 // Endpoints that are backed by real database data. They must surface errors
 // instead of silently falling back to mock data.
@@ -9,6 +9,7 @@ const REAL_GET_ENDPOINTS = new Set([
   "sales/sales",
   "client/customers",
   "client/products",
+  "client/transactions",
   "management/admins",
   "management/performance",
   "staff",
@@ -65,8 +66,6 @@ const getMockData = (args) => {
 
   if (endpoint === 'client/geography') {
     return { data: mockGeographyData };
-  } else if (endpoint === 'client/transactions') {
-    return { data: mockTransactionsData };
   } else if (endpoint === 'management/admins') {
     return { data: mockAdminsData };
   } else if (endpoint && endpoint.startsWith('general/user/')) {

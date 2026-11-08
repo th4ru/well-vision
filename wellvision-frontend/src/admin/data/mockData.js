@@ -122,33 +122,6 @@ export const mockProductsData = [
   }
 ];
 
-export const mockTransactionsData = {
-  transactions: [
-    {
-      _id: "63701cc1f03239b7f700002a",
-      userId: "user1",
-      createdAt: "2024-01-15T10:30:00Z",
-      products: ["product1", "product2"],
-      cost: 125.50
-    },
-    {
-      _id: "63701cc1f03239b7f700002b", 
-      userId: "user2",
-      createdAt: "2024-01-14T14:20:00Z",
-      products: ["product3"],
-      cost: 89.99
-    },
-    {
-      _id: "63701cc1f03239b7f700002c",
-      userId: "user3", 
-      createdAt: "2024-01-13T09:15:00Z",
-      products: ["product1", "product4", "product5"],
-      cost: 234.75
-    }
-  ],
-  total: 3
-};
-
 export const mockCustomersData = [
   {
     _id: "63701cc1f03239b7f700003a",

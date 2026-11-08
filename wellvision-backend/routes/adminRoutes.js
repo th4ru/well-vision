@@ -9,6 +9,7 @@ import {
   createAdminProduct,
   getAdminCustomers,
   getAdminProducts,
+  getAdminTransactions,
   getCurrentUser,
   getDashboard,
   getSales,
@@ -59,6 +60,7 @@ router.get('/management/performance', userAuth, adminOnly, getStaffPerformance);
 router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
 router.get('/client/products', userAuth, adminOnly, getAdminProducts);
 router.post('/client/products', userAuth, adminOnly, createAdminProduct);
+router.get('/client/transactions', userAuth, adminOnly, getAdminTransactions);
 
 /*
 |--------------------------------------------------------------------------

@@ -49,7 +49,7 @@ const emptyRow = (user) => ({
 export const buildStaffPerformance = async () => {
   const [users, invoices] = await Promise.all([
     userModel
-      .find({})
+      .find({ role: { $not: /^admin$/i } })
       .select('staffId name email role createdAt')
       .sort({ createdAt: 1 })
       .lean(),
