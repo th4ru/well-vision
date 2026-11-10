@@ -129,7 +129,9 @@ const Products = () => {
   const theme = useTheme();
   const isNonMobile = useMediaQuery("(min-width: 1000px)");
   const { user } = useContext(AuthContext);
-  const { data, isLoading, error } = useGetProductsQuery();
+  const { data, isLoading, error } = useGetProductsQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+  });
   const [addProduct, { isLoading: isAdding }] = useAddProductMutation();
 
   const [open, setOpen] = useState(false);

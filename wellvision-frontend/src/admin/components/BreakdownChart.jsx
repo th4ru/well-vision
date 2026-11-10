@@ -4,7 +4,9 @@ import { Box, Typography, useTheme } from "@mui/material";
 import { useGetSalesQuery } from "../state/api";
 
 const BreakdownChart = ({ isDashboard = false }) => {
-  const { data, isLoading } = useGetSalesQuery();
+  const { data, isLoading } = useGetSalesQuery(undefined, {
+    refetchOnMountOrArgChange: true,
+  });
   const theme = useTheme();
 
   if (!data || isLoading) return "Loading...";
