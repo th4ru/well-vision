@@ -1,6 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
 import { ResponsivePie } from "@nivo/pie";
-import { Box, Typography, useTheme } from "@mui/material";
+import {
+  Box,
+  Typography,
+  useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
+  Divider,
+} from "@mui/material";
+import { Close } from "@mui/icons-material";
 import { useGetSalesQuery } from "../state/api";
 
 const BreakdownChart = ({ isDashboard = false }) => {
@@ -8,6 +20,7 @@ const BreakdownChart = ({ isDashboard = false }) => {
     refetchOnMountOrArgChange: true,
   });
   const theme = useTheme();
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
 
   if (!data || isLoading) return "Loading...";
 
@@ -45,6 +58,8 @@ const BreakdownChart = ({ isDashboard = false }) => {
           id: category,
           label: categoryLabels[category] || category,
           value: Number(sales) || 0,
+          units: Number(data.unitsByCategory?.[category] || 0),
+          products: data.productsByCategory?.[category] || [],
           color: colors[i % colors.length],
         }));
     }
@@ -52,6 +67,9 @@ const BreakdownChart = ({ isDashboard = false }) => {
     console.error("Error formatting breakdown chart data:", error);
     formattedData = [];
   }
+
+  const selectedCategory =
+    formattedData.find((item) => item.id === selectedCategoryId) || null;
 
   if (formattedData.length === 0) {
     return (
@@ -113,6 +131,7 @@ const BreakdownChart = ({ isDashboard = false }) => {
         }}
         colors={{ datum: "data.color" }}
         valueFormat={(value) => formatCurrency(value)}
+        onClick={(datum) => setSelectedCategoryId(datum.id)}
         margin={
           isDashboard
             ? { top: 40, right: 80, bottom: 100, left: 50 }
@@ -178,7 +197,102 @@ const BreakdownChart = ({ isDashboard = false }) => {
           {!isDashboard && "Total: "}
           {formatCurrency(data?.yearlySalesTotal)}
         </Typography>
+        {!isDashboard && (
+          <Typography variant="body2" sx={{ mt: "0.25rem" }}>
+            Click a slice for products sold
+          </Typography>
+        )}
       </Box>
+
+      <Dialog
+        open={Boolean(selectedCategory)}
+        onClose={() => setSelectedCategoryId(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: theme.palette.background.alt,
+          }}
+        >
+          {selectedCategory?.label || "Category"}
+          <IconButton
+            size="small"
+            onClick={() => setSelectedCategoryId(null)}
+            aria-label="close"
+          >
+            <Close fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedCategory && (
+            <Box display="flex" flexDirection="column" gap="1rem">
+              <Box textAlign="center">
+                <Typography
+                  variant="body2"
+                  sx={{ color: theme.palette.secondary[300] }}
+                >
+                  Products sold
+                </Typography>
+                <Typography variant="h3" fontWeight="bold">
+                  {selectedCategory.units}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ color: theme.palette.secondary[300] }}
+                >
+                  {selectedCategory.units === 1 ? "unit" : "units"}
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Box>
+                <Typography fontWeight="bold" mb="0.5rem">
+                  Products
+                </Typography>
+                {selectedCategory.products.length > 0 ? (
+                  selectedCategory.products.map((product) => (
+                    <Box
+                      key={product.name}
+                      display="flex"
+                      justifyContent="space-between"
+                      gap={2}
+                      py="0.25rem"
+                    >
+                      <Typography>{product.name}</Typography>
+                      <Typography fontWeight="600">
+                        {product.quantity}
+                      </Typography>
+                    </Box>
+                  ))
+                ) : (
+                  <Typography sx={{ color: theme.palette.secondary[300] }}>
+                    No product details available
+                  </Typography>
+                )}
+              </Box>
+
+              <Divider />
+
+              <Box display="flex" justifyContent="space-between" gap={2}>
+                <Typography sx={{ color: theme.palette.secondary[300] }}>
+                  Sales
+                </Typography>
+                <Typography fontWeight="bold">
+                  {formatCurrency(selectedCategory.value)}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedCategoryId(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

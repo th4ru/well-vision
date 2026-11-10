@@ -552,7 +552,7 @@ function Products() {
                         Rs. {product.price.toLocaleString()}
                       </span>
                       <span className="product-stock">
-                        Stock: <span>{product.stock}</span>
+                        Remaining Stock: <span>{product.stock}</span>
                       </span>
                     </div>
                     <div className="product-actions">
@@ -604,7 +604,7 @@ function Products() {
                     <th>Brand</th>
                     <th>Model</th>
                     <th>Price</th>
-                    <th>Stock</th>
+                    <th>Remaining Stock</th>
                     <th>Status</th>
                     {!isSelectMode && <th>Actions</th>}
                   </tr>
@@ -952,7 +952,7 @@ function Products() {
                       <span className="cost-price">Cost: Rs. {viewingProduct.cost.toLocaleString()}</span>
                     </div>
                     <div className="stock-info">
-                      <span className="stock-quantity">Stock: {viewingProduct.stock}</span>
+                      <span className="stock-quantity">Remaining Stock: {viewingProduct.stock}</span>
                       {viewingProduct.reorderLevel > 0 && (
                         <span className="reorder-level">Reorder Level: {viewingProduct.reorderLevel}</span>
                       )}

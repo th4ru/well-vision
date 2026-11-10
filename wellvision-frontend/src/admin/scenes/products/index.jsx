@@ -68,6 +68,15 @@ const Product = ({ product }) => {
   const theme = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const stock = Number(product.stock) || 0;
+  const reorderLevel = Number(product.reorderLevel) || 0;
+  const stockColor =
+    stock === 0
+      ? theme.palette.error.main
+      : stock <= reorderLevel
+      ? theme.palette.warning.main
+      : theme.palette.success.main;
+
   return (
     <Card
       sx={{
@@ -90,6 +99,17 @@ const Product = ({ product }) => {
         <Typography sx={{ mb: "1.5rem" }} color={theme.palette.secondary[400]}>
           {formatCurrency(product.price)}
         </Typography>
+        <Box display="flex" alignItems="center" gap="0.5rem" mb="0.75rem">
+          <Typography variant="body2" color={theme.palette.secondary[300]}>
+            Remaining Stock:
+          </Typography>
+          <Typography variant="h6" fontWeight="bold" color={stockColor}>
+            {stock}
+          </Typography>
+          <Typography variant="body2" color={theme.palette.secondary[300]}>
+            {stock === 1 ? "unit" : "units"}
+          </Typography>
+        </Box>
         <Rating value={product.averageRating || 0} readOnly />
 
         <Typography variant="body2">
@@ -116,8 +136,8 @@ const Product = ({ product }) => {
         <CardContent>
           <Typography>SKU: {product.sku || "N/A"}</Typography>
           <Typography>Brand: {product.brand || "N/A"}</Typography>
-          <Typography>Stock: {product.stock || 0}</Typography>
-          <Typography>Reorder Level: {product.reorderLevel || 0}</Typography>
+          <Typography>Remaining Stock: {stock}</Typography>
+          <Typography>Reorder Level: {reorderLevel}</Typography>
           <Typography>Total Sold: {product.totalSold || 0}</Typography>
         </CardContent>
       </Collapse>

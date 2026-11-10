@@ -93,15 +93,24 @@ const buildSalesData = async () => {
   });
 
   const salesByCategory = {};
+  const unitsByCategory = {};
+  const productsByCategory = {};
 
   const addCategorySale = (category, amount) => {
     if (!(amount > 0)) return;
     salesByCategory[category] = (salesByCategory[category] || 0) + amount;
   };
 
-  const allocateInvoiceToCategories = (invoice, paidAmount) => {
-    if (!(paidAmount > 0)) return;
+  const addCategoryUnits = (category, productName, units) => {
+    if (!(units > 0)) return;
+    unitsByCategory[category] = (unitsByCategory[category] || 0) + units;
+    if (!productsByCategory[category]) productsByCategory[category] = {};
+    const name = productName || 'Unnamed product';
+    productsByCategory[category][name] =
+      (productsByCategory[category][name] || 0) + units;
+  };
 
+  const allocateInvoiceToCategories = (invoice, paidAmount) => {
     const order = invoice.orderNo ? orderByNumber.get(invoice.orderNo) : null;
     let lines = [];
 
@@ -112,6 +121,12 @@ const buildSalesData = async () => {
           : null;
         return {
           category: product?.category || 'uncategorized',
+          name:
+            product?.name ||
+            item.description ||
+            item.sku ||
+            'Unnamed product',
+          units: toNumber(item.quantity),
           amount: toNumber(item.quantity) * toNumber(item.unitPrice),
         };
       });
@@ -119,16 +134,26 @@ const buildSalesData = async () => {
       // Manually created bills have no order link, so match the typed line
       // items against the product catalogue by name or SKU.
       lines = invoice.items.map((item) => {
-        const key = String(item.item || item.description || '')
-          .trim()
-          .toLowerCase();
+        const label = item.item || item.description || 'Item';
+        const key = String(label).trim().toLowerCase();
         const product = productByName.get(key);
         return {
           category: product?.category || 'uncategorized',
+          name: product?.name || label,
+          units: 1,
           amount: toNumber(item.rs) + toNumber(item.cts) / 100,
         };
       });
     }
+
+    // Units are counted for every item line, even free or unpaid lines, so the
+    // number of products sold reflects every product that has left the shop.
+    lines.forEach((line) => {
+      addCategoryUnits(line.category, line.name, line.units);
+    });
+
+    // Revenue only counts money actually received.
+    if (!(paidAmount > 0)) return;
 
     const usableLines = lines.filter((line) => line.amount > 0);
     const totalLineAmount = usableLines.reduce(
@@ -238,10 +263,29 @@ const buildSalesData = async () => {
     if (rounded > 0) roundedSalesByCategory[category] = rounded;
   });
 
+  // Whole-number units and the per-product quantities behind each category.
+  const roundedUnitsByCategory = {};
+  const categoryProducts = {};
+  Object.entries(unitsByCategory).forEach(([category, units]) => {
+    const rounded = Math.round(units);
+    if (rounded > 0) roundedUnitsByCategory[category] = rounded;
+  });
+  Object.entries(productsByCategory).forEach(([category, names]) => {
+    categoryProducts[category] = Object.entries(names)
+      .map(([name, quantity]) => ({
+        name,
+        quantity: Math.round(quantity),
+      }))
+      .filter((entry) => entry.quantity > 0)
+      .sort((a, b) => b.quantity - a.quantity);
+  });
+
   return {
     dailyData,
     monthlyData,
     salesByCategory: roundedSalesByCategory,
+    unitsByCategory: roundedUnitsByCategory,
+    productsByCategory: categoryProducts,
     currentYearInvoices,
     currentYearTotal,
     previousYearTotal,
@@ -266,6 +310,8 @@ export const getSales = async (req, res) => {
       dailyData: sales.dailyData,
       monthlyData: sales.monthlyData,
       salesByCategory: sales.salesByCategory,
+      unitsByCategory: sales.unitsByCategory,
+      productsByCategory: sales.productsByCategory,
       yearlySalesTotal: sales.currentYearTotal,
     });
   } catch (error) {
@@ -331,6 +377,8 @@ export const getDashboard = async (req, res) => {
       yearlyChange: sales.yearlyChange,
       monthlyData: sales.monthlyData,
       salesByCategory: sales.salesByCategory,
+      unitsByCategory: sales.unitsByCategory,
+      productsByCategory: sales.productsByCategory,
       transactions,
     });
   } catch (error) {
