@@ -58,15 +58,99 @@ const buildSalesData = async () => {
   const currentYear = now.getFullYear();
   const previousYear = currentYear - 1;
 
-  const invoices = await InvoiceModel.find({
-    date: {
-      $gte: new Date(previousYear, 0, 1),
-      $lt: new Date(currentYear + 1, 0, 1),
-    },
-  })
-    .select('name amount advance items date createdAt customerId')
-    .sort({ date: -1 })
-    .lean();
+  const [invoices, orders, products] = await Promise.all([
+    InvoiceModel.find({
+      date: {
+        $gte: new Date(previousYear, 0, 1),
+        $lt: new Date(currentYear + 1, 0, 1),
+      },
+    })
+      .select('name amount advance items date createdAt customerId orderNo')
+      .sort({ date: -1 })
+      .lean(),
+    Order.find({}).select('orderNumber items').lean(),
+    Product.find({}).select('sku name category').lean(),
+  ]);
+
+  // Category breakdown is driven by the real product catalogue and the orders
+  // that were billed. Paid money is split across each order's item lines in
+  // proportion to their value, so the chart total always matches the revenue
+  // shown on the dashboard.
+  const productById = new Map(
+    products.map((product) => [String(product._id), product])
+  );
+  const productByName = new Map();
+  products.forEach((product) => {
+    const name = String(product.name || '').trim().toLowerCase();
+    if (name) productByName.set(name, product);
+    const sku = String(product.sku || '').trim().toLowerCase();
+    if (sku) productByName.set(sku, product);
+  });
+
+  const orderByNumber = new Map();
+  orders.forEach((order) => {
+    if (order.orderNumber) orderByNumber.set(order.orderNumber, order);
+  });
+
+  const salesByCategory = {};
+
+  const addCategorySale = (category, amount) => {
+    if (!(amount > 0)) return;
+    salesByCategory[category] = (salesByCategory[category] || 0) + amount;
+  };
+
+  const allocateInvoiceToCategories = (invoice, paidAmount) => {
+    if (!(paidAmount > 0)) return;
+
+    const order = invoice.orderNo ? orderByNumber.get(invoice.orderNo) : null;
+    let lines = [];
+
+    if (order && Array.isArray(order.items) && order.items.length > 0) {
+      lines = order.items.map((item) => {
+        const product = item.productId
+          ? productById.get(String(item.productId))
+          : null;
+        return {
+          category: product?.category || 'uncategorized',
+          amount: toNumber(item.quantity) * toNumber(item.unitPrice),
+        };
+      });
+    } else if (Array.isArray(invoice.items) && invoice.items.length > 0) {
+      // Manually created bills have no order link, so match the typed line
+      // items against the product catalogue by name or SKU.
+      lines = invoice.items.map((item) => {
+        const key = String(item.item || item.description || '')
+          .trim()
+          .toLowerCase();
+        const product = productByName.get(key);
+        return {
+          category: product?.category || 'uncategorized',
+          amount: toNumber(item.rs) + toNumber(item.cts) / 100,
+        };
+      });
+    }
+
+    const usableLines = lines.filter((line) => line.amount > 0);
+    const totalLineAmount = usableLines.reduce(
+      (sum, line) => sum + line.amount,
+      0
+    );
+
+    if (totalLineAmount <= 0) {
+      const fallbackCategory =
+        lines.find((line) => line.category !== 'uncategorized')?.category ||
+        'uncategorized';
+      addCategorySale(fallbackCategory, paidAmount);
+      return;
+    }
+
+    usableLines.forEach((line) => {
+      addCategorySale(
+        line.category,
+        (line.amount / totalLineAmount) * paidAmount
+      );
+    });
+  };
 
   const monthlyData = {};
   MONTHS.forEach((month) => {
@@ -115,6 +199,7 @@ const buildSalesData = async () => {
 
     currentYearInvoices.push(invoice);
     currentYearTotal += paidAmount;
+    allocateInvoiceToCategories(invoice, paidAmount);
 
     const month = monthlyData[MONTHS[invoiceDate.getMonth()]];
     month.totalSales += paidAmount;
@@ -145,9 +230,18 @@ const buildSalesData = async () => {
     totalUnits: 0,
   };
 
+  // Normalise floating point noise from the proportional split and drop
+  // categories that have no paid sales yet.
+  const roundedSalesByCategory = {};
+  Object.entries(salesByCategory).forEach(([category, amount]) => {
+    const rounded = Math.round(amount * 100) / 100;
+    if (rounded > 0) roundedSalesByCategory[category] = rounded;
+  });
+
   return {
     dailyData,
     monthlyData,
+    salesByCategory: roundedSalesByCategory,
     currentYearInvoices,
     currentYearTotal,
     previousYearTotal,
@@ -171,6 +265,7 @@ export const getSales = async (req, res) => {
     return res.json({
       dailyData: sales.dailyData,
       monthlyData: sales.monthlyData,
+      salesByCategory: sales.salesByCategory,
       yearlySalesTotal: sales.currentYearTotal,
     });
   } catch (error) {
@@ -235,7 +330,7 @@ export const getDashboard = async (req, res) => {
       yearlySalesTotal: sales.currentYearTotal,
       yearlyChange: sales.yearlyChange,
       monthlyData: sales.monthlyData,
-      salesByCategory: {},
+      salesByCategory: sales.salesByCategory,
       transactions,
     });
   } catch (error) {

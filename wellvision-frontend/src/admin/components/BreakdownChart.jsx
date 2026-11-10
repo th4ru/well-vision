@@ -9,24 +9,42 @@ const BreakdownChart = ({ isDashboard = false }) => {
 
   if (!data || isLoading) return "Loading...";
 
+  // Product category slugs stored in the database, mapped to the labels used
+  // throughout the admin product pages.
+  const categoryLabels = {
+    eyeglasses: "Eyeglasses",
+    sunglasses: "Sunglasses",
+    "contact-lenses": "Contact Lenses",
+    lens: "Lens",
+    accessories: "Accessories",
+    uncategorized: "Uncategorized",
+  };
+
+  const formatCurrency = (value) =>
+    `Rs. ${Number(value || 0).toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    })}`;
+
   const colors = [
     theme.palette.secondary[500],
     theme.palette.secondary[300],
-    theme.palette.secondary[300],
-    theme.palette.secondary[500],
+    theme.palette.secondary[200],
+    theme.palette.secondary[400],
+    theme.palette.secondary[600],
+    theme.palette.secondary[100],
   ];
-  
+
   let formattedData = [];
   try {
     if (data.salesByCategory) {
-      formattedData = Object.entries(data.salesByCategory).map(
-        ([category, sales], i) => ({
+      formattedData = Object.entries(data.salesByCategory)
+        .filter(([, sales]) => Number(sales) > 0)
+        .map(([category, sales], i) => ({
           id: category,
-          label: category,
-          value: sales || 0,
+          label: categoryLabels[category] || category,
+          value: Number(sales) || 0,
           color: colors[i % colors.length],
-        })
-      );
+        }));
     }
   } catch (error) {
     console.error("Error formatting breakdown chart data:", error);
@@ -92,6 +110,7 @@ const BreakdownChart = ({ isDashboard = false }) => {
           },
         }}
         colors={{ datum: "data.color" }}
+        valueFormat={(value) => formatCurrency(value)}
         margin={
           isDashboard
             ? { top: 40, right: 80, bottom: 100, left: 50 }
@@ -154,7 +173,8 @@ const BreakdownChart = ({ isDashboard = false }) => {
         }}
       >
         <Typography variant="h6">
-          {!isDashboard && "Total:"} ${data?.yearlySalesTotal || 0}
+          {!isDashboard && "Total: "}
+          {formatCurrency(data?.yearlySalesTotal)}
         </Typography>
       </Box>
     </Box>
