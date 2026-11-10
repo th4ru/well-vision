@@ -1,4 +1,15 @@
 import Product from '../models/productModel.js';
+import { applyProductPriceToOrdersAndBills } from '../utils/productPricing.js';
+
+// Staff-facing product responses must never include purchase cost. Only the
+// admin product endpoint (/api/admin/client/products) returns it.
+const toStaffProduct = (product) => {
+  const plain = product?.toObject ? product.toObject() : { ...product };
+  delete plain.cost;
+  delete plain.stockValue;
+  delete plain.profitMargin;
+  return plain;
+};
 
 // Get all products with enhanced filtering and pagination
 export const getProducts = async (req, res) => {
@@ -98,7 +109,7 @@ export const getProducts = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      products,
+      products: products.map(toStaffProduct),
       pagination: {
         currentPage: parseInt(page),
         totalPages: Math.ceil(total / limit),
@@ -143,7 +154,7 @@ export const getProductById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      product
+      product: toStaffProduct(product)
     });
   } catch (error) {
     res.status(500).json({
@@ -156,10 +167,13 @@ export const getProductById = async (req, res) => {
 // Create new product
 export const createProduct = async (req, res) => {
   try {
+    const hasCost = req.body.cost !== undefined && req.body.cost !== '';
     const productData = {
       ...req.body,
       price: parseFloat(req.body.price),
-      cost: parseFloat(req.body.cost),
+      // Staff can add products without seeing the purchase cost; the admin can
+      // fill it in later from the admin products page.
+      cost: hasCost ? parseFloat(req.body.cost) : 0,
       stock: parseInt(req.body.stock),
       reorderLevel: parseInt(req.body.reorderLevel) || 10,
       // Handle optional fields
@@ -191,10 +205,8 @@ export const createProduct = async (req, res) => {
     res.status(201).json({
       success: true,
       product: {
-        ...product.toObject(),
-        profitMargin: product.profitMargin,
+        ...toStaffProduct(product),
         stockStatus: product.stockStatus,
-        stockValue: product.stockValue,
         isAvailable: product.isAvailable,
         primaryImage: product.primaryImage
       },
@@ -222,12 +234,13 @@ export const createProduct = async (req, res) => {
 // Update product
 export const updateProduct = async (req, res) => {
   try {
+    const hasValue = (value) => value !== undefined && value !== '';
     const updateData = {
       ...req.body,
-      price: req.body.price ? parseFloat(req.body.price) : undefined,
-      cost: req.body.cost ? parseFloat(req.body.cost) : undefined,
-      stock: req.body.stock ? parseInt(req.body.stock) : undefined,
-      reorderLevel: req.body.reorderLevel ? parseInt(req.body.reorderLevel) : undefined,
+      price: hasValue(req.body.price) ? parseFloat(req.body.price) : undefined,
+      cost: hasValue(req.body.cost) ? parseFloat(req.body.cost) : undefined,
+      stock: hasValue(req.body.stock) ? parseInt(req.body.stock) : undefined,
+      reorderLevel: hasValue(req.body.reorderLevel) ? parseInt(req.body.reorderLevel) : undefined,
       // Handle optional fields
       weight: req.body.weight ? parseFloat(req.body.weight) : undefined,
       dimensions: req.body.dimensions ? {
@@ -251,6 +264,14 @@ export const updateProduct = async (req, res) => {
       delete updateData.dimensions;
     }
 
+    const existing = await Product.findById(req.params.id).select('price').lean();
+    if (!existing) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -264,13 +285,20 @@ export const updateProduct = async (req, res) => {
       });
     }
 
+    // Keep existing orders and bills aligned with the new price.
+    if (updateData.price !== undefined && Number(existing.price) !== updateData.price) {
+      try {
+        await applyProductPriceToOrdersAndBills(product._id, updateData.price);
+      } catch (pricingError) {
+        console.error('Product price propagation error:', pricingError.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       product: {
-        ...product.toObject(),
-        profitMargin: product.profitMargin,
+        ...toStaffProduct(product),
         stockStatus: product.stockStatus,
-        stockValue: product.stockValue,
         isAvailable: product.isAvailable,
         primaryImage: product.primaryImage
       },
@@ -629,7 +657,7 @@ export const exportProducts = async (req, res) => {
     }
 
     const products = await Product.find(filter)
-      .select('sku name category brand model price cost stock reorderLevel description')
+      .select('sku name category brand model price stock reorderLevel description')
       .sort({ category: 1, name: 1 });
 
     if (format === 'csv') {
@@ -638,11 +666,11 @@ export const exportProducts = async (req, res) => {
       res.setHeader('Content-Disposition', 'attachment; filename="products.csv"');
 
       // CSV header
-      let csv = 'SKU,Name,Category,Brand,Model,Price,Cost,Stock,Reorder Level,Description\n';
+      let csv = 'SKU,Name,Category,Brand,Model,Price,Stock,Reorder Level,Description\n';
 
       // CSV rows
       products.forEach(product => {
-        csv += `"${product.sku || ''}","${product.name}","${product.category}","${product.brand}","${product.model || ''}",${product.price},${product.cost},${product.stock},${product.reorderLevel},"${product.description || ''}"\n`;
+        csv += `"${product.sku || ''}","${product.name}","${product.category}","${product.brand}","${product.model || ''}",${product.price},${product.stock},${product.reorderLevel},"${product.description || ''}"\n`;
       });
 
       res.send(csv);
@@ -650,7 +678,7 @@ export const exportProducts = async (req, res) => {
       // JSON export
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', 'attachment; filename="products.json"');
-      res.json({ products, exportedAt: new Date() });
+      res.json({ products: products.map(toStaffProduct), exportedAt: new Date() });
     }
   } catch (error) {
     console.error('Error exporting products:', error);
@@ -685,9 +713,8 @@ export const updateProductStock = async (req, res) => {
     res.status(200).json({
       success: true,
       product: {
-        ...product.toObject(),
-        stockStatus: product.stockStatus,
-        stockValue: product.stockValue
+        ...toStaffProduct(product),
+        stockStatus: product.stockStatus
       },
       message: `Stock updated from ${oldStock} to ${stock}`,
       change: {

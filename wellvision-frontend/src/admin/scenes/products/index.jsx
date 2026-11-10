@@ -20,11 +20,12 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { Add, Close } from "@mui/icons-material";
+import { Add, Close, Edit } from "@mui/icons-material";
 import Header from "../../components/Header";
 import {
   useAddProductMutation,
   useGetProductsQuery,
+  useUpdateProductMutation,
 } from "../../state/api";
 import { AuthContext } from "../../../context/AuthContext";
 
@@ -64,7 +65,7 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 2,
   })}`;
 
-const Product = ({ product }) => {
+const Product = ({ product, showCost, onEdit }) => {
   const theme = useTheme();
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -124,6 +125,16 @@ const Product = ({ product }) => {
         >
           See More
         </Button>
+        {onEdit && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Edit />}
+            onClick={onEdit}
+          >
+            Edit
+          </Button>
+        )}
       </CardActions>
       <Collapse
         in={isExpanded}
@@ -136,6 +147,9 @@ const Product = ({ product }) => {
         <CardContent>
           <Typography>SKU: {product.sku || "N/A"}</Typography>
           <Typography>Brand: {product.brand || "N/A"}</Typography>
+          {showCost && (
+            <Typography>Cost: {formatCurrency(product.cost)}</Typography>
+          )}
           <Typography>Remaining Stock: {stock}</Typography>
           <Typography>Reorder Level: {reorderLevel}</Typography>
           <Typography>Total Sold: {product.totalSold || 0}</Typography>
@@ -153,8 +167,10 @@ const Products = () => {
     refetchOnMountOrArgChange: true,
   });
   const [addProduct, { isLoading: isAdding }] = useAddProductMutation();
+  const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
 
   const [open, setOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
   const [snackbar, setSnackbar] = useState({
@@ -171,15 +187,40 @@ const Products = () => {
     return [];
   }, [data]);
 
+  const isSaving = isAdding || isUpdating;
+  const isEditing = Boolean(editingProduct);
+
   const handleOpen = () => {
+    setEditingProduct(null);
     setForm(EMPTY_FORM);
     setFormError("");
     setOpen(true);
   };
 
+  const handleEdit = (product) => {
+    setEditingProduct(product);
+    setForm({
+      name: product.name || "",
+      category: product.category || "eyeglasses",
+      brand: product.brand || "",
+      model: product.model || "",
+      price: product.price ?? "",
+      cost: product.cost ?? "",
+      stock: product.stock ?? "",
+      reorderLevel:
+        product.reorderLevel === undefined || product.reorderLevel === null
+          ? ""
+          : String(product.reorderLevel),
+      description: product.description || "",
+    });
+    setFormError("");
+    setOpen(true);
+  };
+
   const handleClose = () => {
-    if (isAdding) return;
+    if (isSaving) return;
     setOpen(false);
+    setEditingProduct(null);
   };
 
   const handleChange = (event) => {
@@ -216,33 +257,45 @@ const Products = () => {
       return;
     }
 
+    const payload = {
+      name: form.name.trim(),
+      category: form.category,
+      brand: form.brand.trim(),
+      model: form.model.trim(),
+      description: form.description.trim(),
+      price: Number(form.price),
+      cost: Number(form.cost),
+      stock: Number(form.stock),
+      reorderLevel:
+        form.reorderLevel === "" ? 10 : Number(form.reorderLevel),
+    };
+
     try {
-      await addProduct({
-        name: form.name.trim(),
-        category: form.category,
-        brand: form.brand.trim(),
-        model: form.model.trim(),
-        description: form.description.trim(),
-        price: Number(form.price),
-        cost: Number(form.cost),
-        stock: Number(form.stock),
-        reorderLevel:
-          form.reorderLevel === "" ? 10 : Number(form.reorderLevel),
-      }).unwrap();
+      if (isEditing) {
+        await updateProduct({
+          id: editingProduct._id,
+          ...payload,
+        }).unwrap();
+      } else {
+        await addProduct(payload).unwrap();
+      }
 
       setOpen(false);
+      setEditingProduct(null);
       setForm(EMPTY_FORM);
       setFormError("");
       setSnackbar({
         open: true,
-        message: "Product added successfully",
+        message: isEditing
+          ? "Product updated successfully"
+          : "Product added successfully",
         severity: "success",
       });
     } catch (submitError) {
       setFormError(
         submitError?.data?.message ||
           submitError?.message ||
-          "Failed to add product"
+          (isEditing ? "Failed to update product" : "Failed to add product")
       );
     }
   };
@@ -317,7 +370,12 @@ const Products = () => {
           }}
         >
           {products.map((product) => (
-            <Product key={product._id} product={product} />
+            <Product
+              key={product._id}
+              product={product}
+              showCost={isAdmin}
+              onEdit={isAdmin ? () => handleEdit(product) : undefined}
+            />
           ))}
         </Box>
       )}
@@ -330,11 +388,11 @@ const Products = () => {
             justifyContent: "space-between",
           }}
         >
-          Add Product
+          {isEditing ? "Edit Product" : "Add Product"}
           <IconButton
             aria-label="close"
             onClick={handleClose}
-            disabled={isAdding}
+            disabled={isSaving}
             size="small"
           >
             <Close fontSize="small" />
@@ -404,6 +462,11 @@ const Products = () => {
               required
               fullWidth
               size="small"
+              helperText={
+                isEditing
+                  ? "Changing the price also updates existing orders and bills"
+                  : ""
+              }
             />
             <TextField
               label="Cost (Rs.)"
@@ -452,11 +515,17 @@ const Products = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose} disabled={isAdding}>
+          <Button onClick={handleClose} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} variant="contained" disabled={isAdding}>
-            {isAdding ? "Adding..." : "Add Product"}
+          <Button onClick={handleSubmit} variant="contained" disabled={isSaving}>
+            {isSaving
+              ? isEditing
+                ? "Saving..."
+                : "Adding..."
+              : isEditing
+              ? "Save Changes"
+              : "Add Product"}
           </Button>
         </DialogActions>
       </Dialog>

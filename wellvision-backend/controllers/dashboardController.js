@@ -10,6 +10,7 @@ import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import userModel from '../models/userModel.js';
 import { buildStaffPerformance } from '../utils/performance.js';
+import { applyProductPriceToOrdersAndBills } from '../utils/productPricing.js';
 
 const MONTHS = [
   'January',
@@ -37,7 +38,10 @@ const toNumber = (value) => {
 };
 
 const percentChange = (current, previous) => {
-  if (!previous) return current ? 100 : 0;
+  if (!previous) {
+    if (!current) return 0;
+    return current > 0 ? 100 : -100;
+  }
   return ((current - previous) / previous) * 100;
 };
 
@@ -69,7 +73,7 @@ const buildSalesData = async () => {
       .sort({ date: -1 })
       .lean(),
     Order.find({}).select('orderNumber items').lean(),
-    Product.find({}).select('sku name category').lean(),
+    Product.find({}).select('sku name category cost').lean(),
   ]);
 
   // Category breakdown is driven by the real product catalogue and the orders
@@ -110,12 +114,14 @@ const buildSalesData = async () => {
       (productsByCategory[category][name] || 0) + units;
   };
 
-  const allocateInvoiceToCategories = (invoice, paidAmount) => {
+  // Turn an invoice into the product lines it actually sold. Order-linked
+  // bills have real product ids, while manually typed bills are matched back
+  // to the catalogue by name or SKU.
+  const buildInvoiceLines = (invoice) => {
     const order = invoice.orderNo ? orderByNumber.get(invoice.orderNo) : null;
-    let lines = [];
 
     if (order && Array.isArray(order.items) && order.items.length > 0) {
-      lines = order.items.map((item) => {
+      return order.items.map((item) => {
         const product = item.productId
           ? productById.get(String(item.productId))
           : null;
@@ -128,12 +134,15 @@ const buildSalesData = async () => {
             'Unnamed product',
           units: toNumber(item.quantity),
           amount: toNumber(item.quantity) * toNumber(item.unitPrice),
+          unitCost: toNumber(product?.cost),
         };
       });
-    } else if (Array.isArray(invoice.items) && invoice.items.length > 0) {
+    }
+
+    if (Array.isArray(invoice.items) && invoice.items.length > 0) {
       // Manually created bills have no order link, so match the typed line
       // items against the product catalogue by name or SKU.
-      lines = invoice.items.map((item) => {
+      return invoice.items.map((item) => {
         const label = item.item || item.description || 'Item';
         const key = String(label).trim().toLowerCase();
         const product = productByName.get(key);
@@ -142,10 +151,15 @@ const buildSalesData = async () => {
           name: product?.name || label,
           units: 1,
           amount: toNumber(item.rs) + toNumber(item.cts) / 100,
+          unitCost: toNumber(product?.cost),
         };
       });
     }
 
+    return [];
+  };
+
+  const allocateInvoiceToCategories = (lines, paidAmount) => {
     // Units are counted for every item line, even free or unpaid lines, so the
     // number of products sold reflects every product that has left the shop.
     lines.forEach((line) => {
@@ -200,6 +214,17 @@ const buildSalesData = async () => {
   let yesterdayTotal = 0;
   let currentMonthUnits = 0;
 
+  // Actual revenue is the money the shop keeps after paying for the products
+  // that were sold. It is recognised in step with the money collected: a fully
+  // paid bill subtracts the full product cost, while a part-paid bill
+  // subtracts only the paid-for share of that cost.
+  let currentYearActualRevenue = 0;
+  let previousYearActualRevenue = 0;
+  let currentMonthActualRevenue = 0;
+  let lastMonthActualRevenue = 0;
+  let todayActualRevenue = 0;
+  let yesterdayActualRevenue = 0;
+
   const currentYearInvoices = [];
 
   invoices.forEach((invoice) => {
@@ -209,22 +234,42 @@ const buildSalesData = async () => {
     // Only the money the customer has actually paid counts towards sales.
     // The unpaid balance stays a receivable until the bill is settled.
     const paidAmount = toNumber(invoice.advance);
+    const billedAmount = toNumber(invoice.amount);
     const units = Array.isArray(invoice.items) ? invoice.items.length : 0;
     const year = invoiceDate.getFullYear();
 
+    // Product cost for this bill and the share of it covered by payments.
+    // Actual revenue therefore matches the cash collected: a fully paid bill
+    // subtracts the full product cost, a part-paid bill only its paid share.
+    const lines = buildInvoiceLines(invoice);
+    const invoiceCost = lines.reduce(
+      (sum, line) => sum + line.units * line.unitCost,
+      0
+    );
+    const paidRatio =
+      billedAmount > 0
+        ? Math.min(Math.max(paidAmount / billedAmount, 0), 1)
+        : paidAmount > 0
+          ? 1
+          : 0;
+    const actualRevenue = paidAmount - invoiceCost * paidRatio;
+
     if (year === previousYear) {
       previousYearTotal += paidAmount;
+      previousYearActualRevenue += actualRevenue;
     }
 
     if (year === lastMonthYear && invoiceDate.getMonth() === lastMonthIndex) {
       lastMonthTotal += paidAmount;
+      lastMonthActualRevenue += actualRevenue;
     }
 
     if (year !== currentYear) return;
 
     currentYearInvoices.push(invoice);
     currentYearTotal += paidAmount;
-    allocateInvoiceToCategories(invoice, paidAmount);
+    currentYearActualRevenue += actualRevenue;
+    allocateInvoiceToCategories(lines, paidAmount);
 
     const month = monthlyData[MONTHS[invoiceDate.getMonth()]];
     month.totalSales += paidAmount;
@@ -239,13 +284,16 @@ const buildSalesData = async () => {
 
     if (key === todayKey) {
       todayTotal += paidAmount;
+      todayActualRevenue += actualRevenue;
     }
     if (key === yesterdayKey) {
       yesterdayTotal += paidAmount;
+      yesterdayActualRevenue += actualRevenue;
     }
     if (invoiceDate.getMonth() === now.getMonth()) {
       currentMonthTotal += paidAmount;
       currentMonthUnits += units;
+      currentMonthActualRevenue += actualRevenue;
     }
   });
 
@@ -295,9 +343,26 @@ const buildSalesData = async () => {
     todayTotal,
     yesterdayTotal,
     todayUnits: todayStats.totalUnits,
+    // Money kept after paying for the products that were sold.
+    currentYearActualRevenue: Math.round(currentYearActualRevenue * 100) / 100,
+    previousYearActualRevenue:
+      Math.round(previousYearActualRevenue * 100) / 100,
+    currentMonthActualRevenue:
+      Math.round(currentMonthActualRevenue * 100) / 100,
+    lastMonthActualRevenue: Math.round(lastMonthActualRevenue * 100) / 100,
+    todayActualRevenue: Math.round(todayActualRevenue * 100) / 100,
     monthlyChange: percentChange(currentMonthTotal, lastMonthTotal),
     todayChange: percentChange(todayTotal, yesterdayTotal),
     yearlyChange: percentChange(currentYearTotal, previousYearTotal),
+    monthlyActualChange: percentChange(
+      currentMonthActualRevenue,
+      lastMonthActualRevenue
+    ),
+    todayActualChange: percentChange(todayActualRevenue, yesterdayActualRevenue),
+    yearlyActualChange: percentChange(
+      currentYearActualRevenue,
+      previousYearActualRevenue
+    ),
   };
 };
 
@@ -335,22 +400,7 @@ export const getStaffPerformance = async (req, res) => {
 // GET /api/admin/general/dashboard
 export const getDashboard = async (req, res) => {
   try {
-    const now = new Date();
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
-    const [sales, totalCustomers, newCustomersThisMonth, newCustomersLastMonth] =
-      await Promise.all([
-        buildSalesData(),
-        Customer.countDocuments(),
-        Customer.countDocuments({
-          createdAt: { $gte: startOfThisMonth, $lt: startOfNextMonth },
-        }),
-        Customer.countDocuments({
-          createdAt: { $gte: startOfLastMonth, $lt: startOfThisMonth },
-        }),
-      ]);
+    const sales = await buildSalesData();
 
     const transactions = sales.currentYearInvoices.slice(0, 10).map((invoice) => ({
       _id: invoice._id,
@@ -361,8 +411,9 @@ export const getDashboard = async (req, res) => {
     }));
 
     return res.json({
-      totalCustomers,
-      customerChange: percentChange(newCustomersThisMonth, newCustomersLastMonth),
+      // Sales minus the cost of the products that were sold.
+      actualRevenue: sales.currentYearActualRevenue,
+      actualRevenueChange: sales.yearlyActualChange,
       todayStats: {
         totalSales: sales.todayTotal,
         totalUnits: sales.todayUnits,
@@ -516,6 +567,95 @@ export const createAdminProduct = async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({ success: false, message: 'A product with this SKU already exists' });
     }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// PUT /api/admin/client/products/:id
+export const updateAdminProduct = async (req, res) => {
+  const hasValue = (value) => value !== undefined && value !== '';
+  const name = (req.body.name || '').trim();
+  const brand = (req.body.brand || '').trim();
+  const category = (req.body.category || '').trim();
+  const model = (req.body.model || '').trim();
+  const description = (req.body.description || '').trim();
+  const price = hasValue(req.body.price) ? Number(req.body.price) : undefined;
+  const cost = hasValue(req.body.cost) ? Number(req.body.cost) : undefined;
+  const stock = hasValue(req.body.stock) ? Number(req.body.stock) : undefined;
+  const reorderLevel = hasValue(req.body.reorderLevel) ? Number(req.body.reorderLevel) : undefined;
+
+  if (!name || !brand || !category) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name, category and brand are required',
+    });
+  }
+  if (!PRODUCT_CATEGORIES.includes(category)) {
+    return res.status(400).json({
+      success: false,
+      message: `Category must be one of: ${PRODUCT_CATEGORIES.join(', ')}`,
+    });
+  }
+  if (price !== undefined && (!Number.isFinite(price) || price < 0)) {
+    return res.status(400).json({ success: false, message: 'Price must be a number of 0 or more' });
+  }
+  if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) {
+    return res.status(400).json({ success: false, message: 'Cost must be a number of 0 or more' });
+  }
+  if (stock !== undefined && (!Number.isFinite(stock) || stock < 0)) {
+    return res.status(400).json({ success: false, message: 'Stock must be a number of 0 or more' });
+  }
+  if (reorderLevel !== undefined && (!Number.isFinite(reorderLevel) || reorderLevel < 0)) {
+    return res.status(400).json({ success: false, message: 'Reorder level must be a number of 0 or more' });
+  }
+
+  try {
+    const existing = await Product.findById(req.params.id).select('price').lean();
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    const update = {
+      name,
+      category,
+      brand,
+      model,
+      description,
+    };
+    if (price !== undefined) update.price = price;
+    if (cost !== undefined) update.cost = cost;
+    if (stock !== undefined) update.stock = stock;
+    if (reorderLevel !== undefined) update.reorderLevel = reorderLevel;
+
+    const product = await Product.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Keep existing orders and their bills aligned with the new price.
+    if (price !== undefined && Number(existing.price) !== price) {
+      try {
+        await applyProductPriceToOrdersAndBills(product._id, price);
+      } catch (pricingError) {
+        console.error('Product price propagation error:', pricingError.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      product: toProductResponse(product.toObject()),
+      message: 'Product updated successfully',
+    });
+  } catch (error) {
+    console.error('PUT /client/products/:id error:', error.message);
+
     if (error.name === 'ValidationError') {
       return res.status(400).json({ success: false, message: error.message });
     }

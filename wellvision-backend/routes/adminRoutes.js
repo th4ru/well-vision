@@ -14,6 +14,7 @@ import {
   getDashboard,
   getSales,
   getStaffPerformance,
+  updateAdminProduct,
   updateCurrentUser,
 } from '../controllers/dashboardController.js';
 import {
@@ -60,6 +61,7 @@ router.get('/management/performance', userAuth, adminOnly, getStaffPerformance);
 router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
 router.get('/client/products', userAuth, adminOnly, getAdminProducts);
 router.post('/client/products', userAuth, adminOnly, createAdminProduct);
+router.put('/client/products/:id', userAuth, adminOnly, updateAdminProduct);
 router.get('/client/transactions', userAuth, adminOnly, getAdminTransactions);
 
 /*

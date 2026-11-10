@@ -8,7 +8,6 @@ import {
   Search,
   Grid,
   List,
-  Edit2,
   Trash2,
   X,
   Eye
@@ -28,8 +27,6 @@ function Products() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'table'
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState('add'); // 'add' or 'edit'
-  const [selectedProduct, setSelectedProduct] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewingProduct, setViewingProduct] = useState(null);
 
@@ -50,7 +47,6 @@ function Products() {
     brand: '',
     model: '',
     price: '',
-    cost: '',
     stock: '',
     reorderLevel: '',
     description: '',
@@ -171,14 +167,12 @@ function Products() {
   };
 
   const handleAddProduct = () => {
-    setModalMode('add');
     setFormData({
       name: '',
       category: 'eyeglasses',
       brand: '',
       model: '',
       price: '',
-      cost: '',
       stock: '',
       reorderLevel: '',
       description: '',
@@ -186,27 +180,6 @@ function Products() {
       frameColor: '',
       lensType: '',
       prescription: false
-    });
-    setShowModal(true);
-  };
-
-  const handleEditProduct = (product) => {
-    setModalMode('edit');
-    setSelectedProduct(product);
-    setFormData({
-      name: product.name,
-      category: product.category,
-      brand: product.brand,
-      model: product.model,
-      price: product.price,
-      cost: product.cost,
-      stock: product.stock,
-      reorderLevel: product.reorderLevel,
-      description: product.description,
-      frameMaterial: product.frameMaterial,
-      frameColor: product.frameColor,
-      lensType: product.lensType,
-      prescription: product.prescription
     });
     setShowModal(true);
   };
@@ -236,37 +209,37 @@ function Products() {
       const productData = {
         ...formData,
         price: parseFloat(formData.price),
-        cost: parseFloat(formData.cost),
         stock: parseInt(formData.stock),
-        reorderLevel: parseInt(formData.reorderLevel)
+        reorderLevel: parseInt(formData.reorderLevel) || 10
       };
 
-      if (modalMode === 'add') {
-        const response = await axios.post('http://localhost:4000/api/products', productData, {
-          withCredentials: true
-        });
+      // Staff never send a purchase cost. The admin fills it in later.
+      const response = await axios.post('http://localhost:4000/api/products', productData, {
+        withCredentials: true
+      });
 
-        if (response.data.success) {
-          setProducts([...products, response.data.product]);
-          alert('Product added successfully!');
-        }
-      } else {
-        const response = await axios.put(`http://localhost:4000/api/products/${selectedProduct._id}`, productData, {
-          withCredentials: true
+      if (response.data.success) {
+        setProducts([response.data.product, ...products]);
+        alert('Product added successfully!');
+        setShowModal(false);
+        setFormData({
+          name: '',
+          category: 'eyeglasses',
+          brand: '',
+          model: '',
+          price: '',
+          stock: '',
+          reorderLevel: '',
+          description: '',
+          frameMaterial: '',
+          frameColor: '',
+          lensType: '',
+          prescription: false
         });
-
-        if (response.data.success) {
-          setProducts(products.map(p =>
-            p._id === selectedProduct._id ? response.data.product : p
-          ));
-          alert('Product updated successfully!');
-        }
       }
-
-      setShowModal(false);
     } catch (error) {
-      console.error('Error saving product:', error);
-      alert('Failed to save product. Please try again.');
+      console.error('Error adding product:', error);
+      alert(error.response?.data?.message || 'Failed to add product. Please try again.');
     }
   };
 
@@ -503,7 +476,7 @@ function Products() {
               {!(searchQuery || categoryFilter !== 'all' || stockFilter !== 'all' || brandFilter !== 'all') && (
                 <button className="add-product-btn" onClick={handleAddProduct}>
                   <Plus size={16} />
-                  Add Your First Product
+                  Add Product
                 </button>
               )}
             </div>
@@ -571,13 +544,6 @@ function Products() {
                           >
                             <Eye size={14} />
                             View
-                          </button>
-                          <button
-                            className="action-btn edit-action-btn"
-                            onClick={() => handleEditProduct(product)}
-                          >
-                            <Edit2 size={14} />
-                            Edit
                           </button>
                           <button
                             className="action-btn delete-action-btn"
@@ -669,13 +635,6 @@ function Products() {
                         <td>
                           <div className="table-actions">
                             <button
-                              className="table-action-btn edit-action-btn"
-                              onClick={() => handleEditProduct(product)}
-                            >
-                              <Edit2 size={14} />
-                              Edit
-                            </button>
-                            <button
                               className="table-action-btn delete-action-btn"
                               onClick={() => handleDeleteProduct(product._id)}
                             >
@@ -699,7 +658,7 @@ function Products() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
-                {modalMode === 'add' ? 'Add New Product' : 'Edit Product'}
+                Add New Product
               </h3>
               <button className="modal-close" onClick={() => setShowModal(false)}>
                 <X size={20} />
@@ -779,22 +738,6 @@ function Products() {
                       className="form-input"
                       name="price"
                       value={formData.price}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Cost Price (Rs.) <span className="required">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      name="cost"
-                      value={formData.cost}
                       onChange={handleInputChange}
                       min="0"
                       step="0.01"
@@ -903,7 +846,7 @@ function Products() {
                   Cancel
                 </button>
                 <button type="submit" className="modal-btn modal-btn-submit">
-                  {modalMode === 'add' ? 'Add Product' : 'Save Changes'}
+                  Add Product
                 </button>
               </div>
             </form>
@@ -949,7 +892,6 @@ function Products() {
                   <div className="product-pricing-info">
                     <div className="price-display">
                       <span className="selling-price">Rs. {viewingProduct.price.toLocaleString()}</span>
-                      <span className="cost-price">Cost: Rs. {viewingProduct.cost.toLocaleString()}</span>
                     </div>
                     <div className="stock-info">
                       <span className="stock-quantity">Remaining Stock: {viewingProduct.stock}</span>
@@ -1004,16 +946,6 @@ function Products() {
                 onClick={() => setShowViewModal(false)}
               >
                 Close
-              </button>
-              <button
-                type="button"
-                className="modal-btn modal-btn-submit"
-                onClick={() => {
-                  setShowViewModal(false);
-                  handleEditProduct(viewingProduct);
-                }}
-              >
-                Edit Product
               </button>
             </div>
           </div>

@@ -40,9 +40,10 @@ export const createProductValidator = [
     .isFloat({ min: 0 })
     .withMessage('Price must be a positive number'),
 
+  // Staff can create products without a purchase cost. Admins manage cost from
+  // the admin products page, so treat a missing cost as 0.
   body('cost')
-    .notEmpty()
-    .withMessage('Cost is required')
+    .optional({ values: 'falsy' })
     .isFloat({ min: 0 })
     .withMessage('Cost must be a positive number'),
 

@@ -2,7 +2,15 @@ import React from "react";
 import { Box, Typography, useTheme } from "@mui/material";
 import FlexBetween from "./FlexBetween";
 
-const StatBox = ({ title, value, increase, icon, description }) => {
+const StatBox = ({
+  title,
+  value,
+  increase,
+  icon,
+  description,
+  valueColor,
+  hint,
+}) => {
   const theme = useTheme();
   return (
     <Box
@@ -15,6 +23,7 @@ const StatBox = ({ title, value, increase, icon, description }) => {
       flex="1 1 100%"
       backgroundColor={theme.palette.background.alt}
       borderRadius="0.55rem"
+      title={hint}
     >
       <FlexBetween>
         <Typography variant="h6" sx={{ color: theme.palette.secondary[100] }}>
@@ -26,7 +35,7 @@ const StatBox = ({ title, value, increase, icon, description }) => {
       <Typography
         variant="h3"
         fontWeight="600"
-        sx={{ color: theme.palette.secondary[200] }}
+        sx={{ color: valueColor || theme.palette.secondary[200] }}
       >
         {value}
       </Typography>

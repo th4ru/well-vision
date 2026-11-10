@@ -119,6 +119,14 @@ export const api = createApi({
       }),
       invalidatesTags: ["Products"],
     }),
+    updateProduct: build.mutation({
+      query: ({ id, ...productData }) => ({
+        url: `client/products/${id}`,
+        method: "PUT",
+        body: productData,
+      }),
+      invalidatesTags: ["Products", "Dashboard", "Sales", "Transactions"],
+    }),
     getCustomers: build.query({
       query: () => "client/customers",
       providesTags: ["Customers"],
@@ -222,6 +230,7 @@ export const {
   useUpdateMeMutation,
   useGetProductsQuery,
   useAddProductMutation,
+  useUpdateProductMutation,
   useGetCustomersQuery,
   useGetTransactionsQuery,
   useGetGeographyQuery,

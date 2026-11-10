@@ -2,8 +2,8 @@ import React from "react";
 import FlexBetween from "../../components/FlexBetween";
 import Header from "../../components/Header";
 import {
+  AccountBalanceWallet,
   DownloadOutlined,
-  Email,
   PointOfSale,
   PersonAdd,
   Traffic,
@@ -50,12 +50,16 @@ const Dashboard = () => {
   const safeData = data || {};
   const safeTransactions = Array.isArray(safeData.transactions) ? safeData.transactions : [];
 
-  const formatNumber = (value) => Number(value || 0).toLocaleString();
-  const formatCurrency = (value) => `Rs. ${Number(value || 0).toLocaleString()}`;
+  const formatCurrency = (value) => {
+    const numeric = Number(value || 0);
+    return `${numeric < 0 ? "-" : ""}Rs. ${Math.abs(numeric).toLocaleString()}`;
+  };
   const formatChange = (value) => {
     const numeric = Number(value || 0);
     return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
   };
+
+  const actualRevenue = Number(safeData.actualRevenue || 0);
 
   const columns = [
     {
@@ -122,12 +126,16 @@ const Dashboard = () => {
       >
         {/* ROW 1 */}
         <StatBox
-          title="Total Customers"
-          value={formatNumber(data?.totalCustomers)}
-          increase={formatChange(data?.customerChange)}
-          description="vs last month"
+          title="Actual Revenue"
+          value={formatCurrency(actualRevenue)}
+          valueColor={
+            actualRevenue < 0 ? theme.palette.error.main : undefined
+          }
+          increase={formatChange(data?.actualRevenueChange)}
+          description="vs last year"
+          hint="Money collected minus the cost of the products that were sold."
           icon={
-            <Email
+            <AccountBalanceWallet
               sx={{ color: theme.palette.secondary[300], fontSize: "26px" }}
             />
           }
