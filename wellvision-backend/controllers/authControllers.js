@@ -53,7 +53,10 @@ export const register = async (req, res) => {
         sendToken(user, res);
         // 🍪 Set token in HTTP-only cookie
 
-        // 📧 Send welcome email to registered user
+        // 📧 Send welcome email to registered user.
+        // Email delivery must not block account creation: when SMTP is not
+        // configured (or rejects the credentials) the account already exists,
+        // so log the failure and still report a successful registration.
         const mailOption = {
             from: process.env.SENDER_EMAIL,
             to: email,
@@ -61,9 +64,16 @@ export const register = async (req, res) => {
             text: `Welcome to WellVision Staff. Your account has been created with email id: ${email}`
         };
 
-        await transporter.sendMail(mailOption);
+        try {
+            await transporter.sendMail(mailOption);
+        } catch (mailError) {
+            console.error('Welcome email could not be sent:', mailError.message);
+        }
 
-        return res.json({ success: true });
+        return res.json({
+            success: true,
+            message: 'Account registered successfully'
+        });
 
     } catch (error) {
         res.json({ success: false, message: error.message });

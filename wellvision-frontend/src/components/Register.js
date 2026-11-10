@@ -34,7 +34,7 @@ function Register() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setMessage('Registration successful. Please verify your email.');
+        setMessage('Account registered successfully. Please verify your email.');
         setTimeout(() => {
           navigate('/');
         }, 2000);
