@@ -15,6 +15,7 @@ import {
   updateProductStock
 } from '../controllers/productController.js';
 import userAuth from '../middleware/userAuth.js';
+import adminOnly from '../middleware/adminOnly.js';
 import validateRequest from '../middleware/validateRequest.js';
 import {
   createProductValidator,
@@ -49,7 +50,7 @@ router.get('/:id', productIdValidator, validateRequest, getProductById);
 router.post('/', createProductValidator, validateRequest, createProduct);
 
 // Update product
-router.put('/:id', updateProductValidator, validateRequest, updateProduct);
+router.put('/:id', adminOnly, updateProductValidator, validateRequest, updateProduct);
 
 // Update product stock
 router.patch('/:id/stock', productIdValidator, validateRequest, updateProductStock);

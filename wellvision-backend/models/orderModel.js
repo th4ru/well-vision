@@ -10,6 +10,7 @@ const orderItemSchema = new mongoose.Schema({
 
 const orderSchema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true },
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: false },
   customerName: { type: String, required: true },
   customerEmail: { type: String },
   items: [orderItemSchema],
@@ -20,6 +21,9 @@ const orderSchema = new mongoose.Schema({
   },
   collected: { type: Boolean, default: false },
   total: { type: Number, required: true, default: 0 },
+  amountGiven: { type: Number, default: 0 },
+  // Staff account that created this order. Used by the Performance report.
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
   placedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 

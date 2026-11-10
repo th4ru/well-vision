@@ -353,10 +353,29 @@ const WellVisionInvoice = ({ customer }) => {
     if (isSubmitting) return;
     const result = await saveInvoice({ resetAfterSave: false });
     if (result && result.success) {
+      const element = formRef.current;
+      // The on-screen sheet is scaled down at shorter screen heights. Capturing
+      // that scaled-down view makes the text blurry, so capture the invoice at
+      // its full width and a high DPI instead.
+      const actions = element.querySelector('.invoice-actions');
+      const previousTransform = element.style.transform;
+      const previousWidth = element.style.width;
+      const previousMaxWidth = element.style.maxWidth;
+      const previousActionsDisplay = actions ? actions.style.display : '';
+
+      element.style.transform = 'none';
+      element.style.width = '1000px';
+      element.style.maxWidth = 'none';
+      if (actions) actions.style.display = 'none';
+
       try {
-        const element = formRef.current;
+        // Make sure web fonts are ready before rasterising the sheet.
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
+        }
+
         const canvas = await html2canvas(element, {
-          scale: 2,
+          scale: 4,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#fff',
@@ -364,36 +383,89 @@ const WellVisionInvoice = ({ customer }) => {
           scrollY: 0,
           windowWidth: element.scrollWidth,
           windowHeight: element.scrollHeight,
+          letterRendering: true,
+          logging: false,
+          onclone: (clonedDoc) => {
+            const clonedSheet = clonedDoc.querySelector('.bill-container');
+            if (clonedSheet) {
+              clonedSheet.style.transform = 'none';
+              clonedSheet.style.width = '1000px';
+              clonedSheet.style.maxWidth = 'none';
+            }
+            const clonedActions = clonedDoc.querySelector('.invoice-actions');
+            if (clonedActions) clonedActions.style.display = 'none';
+          },
         });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
+
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true });
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        const imgAspectRatio = imgWidth / imgHeight;
-        const pdfAspectRatio = pdfWidth / pdfHeight;
 
-        let finalWidth, finalHeight;
-        if (imgAspectRatio > pdfAspectRatio) {
-          // Image is wider, fit to width
-          finalWidth = pdfWidth;
-          finalHeight = pdfWidth / imgAspectRatio;
-        } else {
-          // Image is taller, fit to height
-          finalHeight = pdfHeight;
-          finalWidth = pdfHeight * imgAspectRatio;
+        // Keep a small margin around the invoice and scale it to the full page
+        // width. If the sheet is taller than one page it is split across pages
+        // rather than shrunk, so the text always stays readable.
+        const margin = 8;
+        const contentWidth = pdfWidth - margin * 2;
+        const contentHeight = pdfHeight - margin * 2;
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const pxPerPage = Math.max(
+          1,
+          Math.floor((canvasWidth * contentHeight) / contentWidth)
+        );
+
+        let offset = 0;
+        let pageIndex = 0;
+
+        while (offset < canvasHeight) {
+          const sliceHeight = Math.min(pxPerPage, canvasHeight - offset);
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = canvasWidth;
+          pageCanvas.height = sliceHeight;
+          const pageContext = pageCanvas.getContext('2d');
+          pageContext.fillStyle = '#ffffff';
+          pageContext.fillRect(0, 0, canvasWidth, sliceHeight);
+          pageContext.drawImage(
+            canvas,
+            0,
+            offset,
+            canvasWidth,
+            sliceHeight,
+            0,
+            0,
+            canvasWidth,
+            sliceHeight
+          );
+
+          const pageData = pageCanvas.toDataURL('image/png');
+          const renderHeight = (sliceHeight * contentWidth) / canvasWidth;
+
+          if (pageIndex > 0) pdf.addPage();
+          pdf.addImage(
+            pageData,
+            'PNG',
+            margin,
+            margin,
+            contentWidth,
+            renderHeight,
+            undefined,
+            'FAST'
+          );
+
+          offset += sliceHeight;
+          pageIndex += 1;
         }
 
-        const imgX = (pdfWidth - finalWidth) / 2;
-        const imgY = 0;
-
-        pdf.addImage(imgData, 'PNG', imgX, imgY, finalWidth, finalHeight);
         pdf.save(`invoice-${formData.billNo || 'draft'}.pdf`);
         toast.success('PDF downloaded successfully!');
       } catch (error) {
         console.error('Error generating PDF:', error);
         toast.error('Failed to generate PDF');
+      } finally {
+        element.style.transform = previousTransform;
+        element.style.width = previousWidth;
+        element.style.maxWidth = previousMaxWidth;
+        if (actions) actions.style.display = previousActionsDisplay;
       }
     }
   };

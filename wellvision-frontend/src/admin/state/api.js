@@ -1,10 +1,28 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { mockDashboardData, mockSalesData, mockUserData, mockProductsData, mockTransactionsData, mockCustomersData, mockGeographyData, mockPerformanceData, mockAdminsData, mockStaffData } from "../data/mockData";
+import { mockUserData, mockGeographyData, mockAdminsData } from "../data/mockData";
 
-// Custom base query that falls back to mock data
+// Endpoints that are backed by real database data. They must surface errors
+// instead of silently falling back to mock data.
+const REAL_GET_ENDPOINTS = new Set([
+  "general/dashboard",
+  "general/me",
+  "sales/sales",
+  "client/customers",
+  "client/products",
+  "client/transactions",
+  "management/admins",
+  "management/performance",
+  "staff",
+]);
+
+const getEndpoint = (args) => (typeof args === "string" ? args : args.url);
+
+// Custom base query that falls back to mock data for endpoints that are not
+// implemented by the backend yet.
 const baseQueryWithFallback = async (args, api, extraOptions) => {
   const baseQuery = fetchBaseQuery({
     baseUrl: process.env.REACT_APP_BASE_URL || "http://localhost:4000/api/admin",
+    credentials: "include",
     prepareHeaders: (headers) => {
       headers.set("Content-Type", "application/json");
       return headers;
@@ -21,20 +39,21 @@ const baseQueryWithFallback = async (args, api, extraOptions) => {
     const result = await baseQuery(args, api, extraOptions);
 
     if (result.error) {
-      // Do not fallback for write operations; surface the error to the UI
-      if (method !== "GET") return result;
+      // Do not fallback for write operations or real endpoints; surface the
+      // error to the UI.
+      if (method !== "GET" || REAL_GET_ENDPOINTS.has(getEndpoint(args))) return result;
 
       console.warn(
-        `API ${method} ${typeof args === "string" ? args : args.url} failed, using mock data`
+        `API ${method} ${getEndpoint(args)} failed, using mock data`
       );
       return getMockData(args);
     }
 
     return result;
   } catch (error) {
-    if (method !== "GET") throw error;
+    if (method !== "GET" || REAL_GET_ENDPOINTS.has(getEndpoint(args))) throw error;
     console.warn(
-      `API ${method} ${typeof args === "string" ? args : args.url} failed, using mock data:`,
+      `API ${method} ${getEndpoint(args)} failed, using mock data:`,
       error
     );
     return getMockData(args);
@@ -43,27 +62,12 @@ const baseQueryWithFallback = async (args, api, extraOptions) => {
 
 // Function to return appropriate mock data based on endpoint
 const getMockData = (args) => {
-  const endpoint = typeof args === 'string' ? args : args.url;
-  
-  if (endpoint === 'general/dashboard') {
-    return { data: mockDashboardData };
-  } else if (endpoint === 'sales/sales') {
-    return { data: mockSalesData };
-  } else if (endpoint === 'client/products') {
-    return { data: mockProductsData };
-  } else if (endpoint === 'client/customers') {
-    return { data: mockCustomersData };
-  } else if (endpoint === 'client/geography') {
+  const endpoint = getEndpoint(args);
+
+  if (endpoint === 'client/geography') {
     return { data: mockGeographyData };
-  } else if (endpoint === 'client/transactions') {
-    return { data: mockTransactionsData };
-  } else if (endpoint && endpoint.startsWith('management/performance/')) {
-    return { data: mockPerformanceData };
   } else if (endpoint === 'management/admins') {
     return { data: mockAdminsData };
-  } else if (endpoint === 'staff') {
-    // Match backend response shape for staff list
-    return { data: { staff: mockStaffData.staff, total: mockStaffData.total } };
   } else if (endpoint && endpoint.startsWith('general/user/')) {
     return { data: mockUserData };
   } else {
@@ -91,9 +95,37 @@ export const api = createApi({
       query: (id) => `general/user/${id}`,
       providesTags: ["User"],
     }),
+    getMe: build.query({
+      query: () => "general/me",
+      providesTags: ["User"],
+    }),
+    updateMe: build.mutation({
+      query: (profileData) => ({
+        url: "general/me",
+        method: "PUT",
+        body: profileData,
+      }),
+      invalidatesTags: ["User"],
+    }),
     getProducts: build.query({
       query: () => "client/products",
       providesTags: ["Products"],
+    }),
+    addProduct: build.mutation({
+      query: (productData) => ({
+        url: "client/products",
+        method: "POST",
+        body: productData,
+      }),
+      invalidatesTags: ["Products"],
+    }),
+    updateProduct: build.mutation({
+      query: ({ id, ...productData }) => ({
+        url: `client/products/${id}`,
+        method: "PUT",
+        body: productData,
+      }),
+      invalidatesTags: ["Products", "Dashboard", "Sales", "Transactions"],
     }),
     getCustomers: build.query({
       query: () => "client/customers",
@@ -166,8 +198,23 @@ export const api = createApi({
       query: () => "staff/stats",
       providesTags: ["Staff"],
     }),
-    getUserPerformance: build.query({
-      query: (id) => `management/performance/${id}`,
+    lookupStaffAccess: build.mutation({
+      query: ({ staffId, name }) => ({
+        url: "staff/lookup",
+        method: "POST",
+        body: { staffId, name },
+      }),
+    }),
+    updateStaffAccess: build.mutation({
+      query: ({ id, access }) => ({
+        url: `staff/${id}/access`,
+        method: "PUT",
+        body: { access },
+      }),
+      invalidatesTags: ["Staff"],
+    }),
+    getStaffPerformance: build.query({
+      query: () => "management/performance",
       providesTags: ["Performance"],
     }),
     getDashboard: build.query({
@@ -179,7 +226,11 @@ export const api = createApi({
 
 export const {
   useGetUserQuery,
+  useGetMeQuery,
+  useUpdateMeMutation,
   useGetProductsQuery,
+  useAddProductMutation,
+  useUpdateProductMutation,
   useGetCustomersQuery,
   useGetTransactionsQuery,
   useGetGeographyQuery,
@@ -192,6 +243,8 @@ export const {
   useUpdateStaffMutation,
   useDeleteStaffMutation,
   useGetStaffStatsQuery,
-  useGetUserPerformanceQuery,
+  useLookupStaffAccessMutation,
+  useUpdateStaffAccessMutation,
+  useGetStaffPerformanceQuery,
   useGetDashboardQuery,
 } = api;

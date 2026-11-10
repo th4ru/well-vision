@@ -122,33 +122,6 @@ export const mockProductsData = [
   }
 ];
 
-export const mockTransactionsData = {
-  transactions: [
-    {
-      _id: "63701cc1f03239b7f700002a",
-      userId: "user1",
-      createdAt: "2024-01-15T10:30:00Z",
-      products: ["product1", "product2"],
-      cost: 125.50
-    },
-    {
-      _id: "63701cc1f03239b7f700002b", 
-      userId: "user2",
-      createdAt: "2024-01-14T14:20:00Z",
-      products: ["product3"],
-      cost: 89.99
-    },
-    {
-      _id: "63701cc1f03239b7f700002c",
-      userId: "user3", 
-      createdAt: "2024-01-13T09:15:00Z",
-      products: ["product1", "product4", "product5"],
-      cost: 234.75
-    }
-  ],
-  total: 3
-};
-
 export const mockCustomersData = [
   {
     _id: "63701cc1f03239b7f700003a",
@@ -231,34 +204,6 @@ export const mockGeographyData = [
     value: 6
   }
 ];
-
-export const mockPerformanceData = {
-  sales: [
-    {
-      _id: "63701cc1f03239b7f700004a",
-      userId: "admin-id-placeholder",
-      createdAt: "2024-01-15T10:30:00Z",
-      products: ["product1", "product2"],
-      cost: 299.99
-    },
-    {
-      _id: "63701cc1f03239b7f700004b",
-      userId: "admin-id-placeholder", 
-      createdAt: "2024-01-14T14:20:00Z",
-      products: ["product3", "product4", "product5"],
-      cost: 549.97
-    },
-    {
-      _id: "63701cc1f03239b7f700004c",
-      userId: "admin-id-placeholder",
-      createdAt: "2024-01-13T09:15:00Z",
-      products: ["product1"],
-      cost: 149.99
-    }
-  ],
-  totalSales: 999.95,
-  totalUnits: 6
-};
 
 export const mockAdminsData = [
   {

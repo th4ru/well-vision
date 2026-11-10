@@ -15,3 +15,39 @@
   padding: 0;
   background-color: #f4f4f4;
 }
+
+/* Shared back navigation bar shown on every page except the dashboard */
+.page-back-bar {
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  padding: 10px 24px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.page-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #0d9488;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.page-back-btn:hover {
+  background-color: #f0fdfa;
+  border-color: #0d9488;
+}
+
+.page-back-btn:active {
+  transform: translateY(1px);
+}

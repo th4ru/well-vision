@@ -17,6 +17,12 @@ import orderRoutes from './routes/orderRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import prescriptionRoutes from './routes/prescriptionRoutes.js';
+import {
+  ensureStaffProfiles,
+  removeLegacyStaffSeeds,
+} from './utils/staffProfile.js';
+import { backfillInvoiceCreators } from './utils/performance.js';
 
 // Load .env colocated with this file, regardless of process.cwd()
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +58,10 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/admin', adminRoutes); // admin management (list/create admins)
+app.use('/api/prescriptions', prescriptionRoutes); // customer prescription files
+
+// Uploaded prescription files are served statically so they can be viewed.
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Error Handler Middleware (should be last middleware)
 app.use((err, req, res, next) => {
@@ -62,8 +72,18 @@ app.use((err, req, res, next) => {
 // Connect to MongoDB and start the server
 const mongoUri = (process.env.MONGODB_URI || '').toString().trim().replace(/^['"]|['"]$/g, '');
 
-mongoose.connect(mongoUri).then(() => {
+mongoose.connect(mongoUri).then(async () => {
   console.log('✅ MongoDB Connected');
+  // Keep the Staff directory in sync with the real user accounts and remove
+  // any demo employees left behind by the old seeder.
+  try {
+    await removeLegacyStaffSeeds();
+    await ensureStaffProfiles();
+    await backfillInvoiceCreators();
+  } catch (error) {
+    console.error('Startup data sync failed:', error.message);
+  }
+
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
   });

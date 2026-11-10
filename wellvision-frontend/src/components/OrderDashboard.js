@@ -11,9 +11,44 @@ import {
   X,
   Eye,
   Package,
-  Minus,
-  ShoppingCart
+  ShoppingCart,
+  ArrowLeft
 } from 'lucide-react';
+
+const DEFAULT_ORDER_FORM = {
+  orderNumber: '',
+  customerId: '',
+  customerName: '',
+  customerEmail: '',
+  status: 'Order Received',
+  items: [],
+  amountGiven: '',
+  notes: ''
+};
+
+// Status choices shown when creating an order.
+// "Lab Processing" is displayed to the user while the backend keeps its
+// existing stored value, "In Lab Processing".
+const ADD_ORDER_STATUS_OPTIONS = [
+  { value: 'Order Received', label: 'Order Received' },
+  { value: 'Order Placed in Lab', label: 'Order Placed in Lab' },
+  { value: 'In Lab Processing', label: 'Lab Processing' },
+  { value: 'Ready for Customer', label: 'Ready for Customer' },
+  { value: 'Customer Collected', label: 'Customer Collected' }
+];
+
+const getStatusLabel = (status) =>
+  status === 'In Lab Processing' ? 'Lab Processing' : status;
+
+// Due balance is the unpaid part of an order. Orders that predate the
+// "Amount Customer Gives" field have no recorded payment; once collected we
+// treat them as settled instead of showing the full total as outstanding.
+const getDueBalance = (order) => {
+  const total = Number(order.total) || 0;
+  const amountGiven = Number(order.amountGiven) || 0;
+  if (order.status === 'Customer Collected' && amountGiven <= 0) return 0;
+  return Math.max(total - amountGiven, 0);
+};
 
 function Orders() {
   const navigate = useNavigate();
@@ -32,14 +67,15 @@ function Orders() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [orderForm, setOrderForm] = useState(() => {
     // Restore form data from localStorage if available
-    const savedForm = localStorage.getItem('orderFormData');
-    return savedForm ? JSON.parse(savedForm) : {
-      orderNumber: '',
-      customerName: '',
-      customerEmail: '',
-      items: [],
-      notes: ''
-    };
+    try {
+      const savedForm = localStorage.getItem('orderFormData');
+      return savedForm
+        ? { ...DEFAULT_ORDER_FORM, ...JSON.parse(savedForm) }
+        : DEFAULT_ORDER_FORM;
+    } catch (error) {
+      console.error('Error restoring order form:', error);
+      return DEFAULT_ORDER_FORM;
+    }
   });
 
   // Filter states
@@ -51,7 +87,7 @@ function Orders() {
     { value: 'all', label: 'All Statuses' },
     { value: 'Order Received', label: 'Order Received' },
     { value: 'Order Placed in Lab', label: 'Order Placed in Lab' },
-    { value: 'In Lab Processing', label: 'In Lab Processing' },
+    { value: 'In Lab Processing', label: 'Lab Processing' },
     { value: 'Transit to Shop', label: 'Transit to Shop' },
     { value: 'Ready for Customer', label: 'Ready for Customer' },
     { value: 'Customer Collected', label: 'Customer Collected' }
@@ -93,6 +129,7 @@ function Orders() {
             placedAt: order.placedAt,
             status: order.status,
             total: order.total,
+            amountGiven: order.amountGiven || 0,
             items: order.items.map(item => ({
               product: item.description || item.sku,
               quantity: item.quantity,
@@ -128,6 +165,21 @@ function Orders() {
     };
 
     fetchOrders();
+
+    // When the Orders tab is opened from a customer profile, start a new
+    // order with that customer's details already filled in.
+    if (location.state?.newOrderForCustomer) {
+      const { customerId, customerName, customerEmail } = location.state.newOrderForCustomer;
+      setOrderForm({
+        ...DEFAULT_ORDER_FORM,
+        customerId: customerId || '',
+        customerName: customerName || '',
+        customerEmail: customerEmail || ''
+      });
+      setShowAddModal(true);
+      window.history.replaceState({}, document.title);
+      return;
+    }
 
     // Check if products were selected from the products page
     if (location.state?.selectedProducts) {
@@ -315,6 +367,15 @@ function Orders() {
   };
 
   // Add order functions
+  // Opening a brand new order from the Orders page always starts from a blank
+  // form. Customer details are only pre-filled when the order is started from a
+  // customer's profile / Job Card.
+  const openAddOrderModal = () => {
+    localStorage.removeItem('orderFormData');
+    setOrderForm({ ...DEFAULT_ORDER_FORM, items: [] });
+    setShowAddModal(true);
+  };
+
   const handleRemoveItem = (index) => {
     setOrderForm({
       ...orderForm,
@@ -348,6 +409,7 @@ function Orders() {
         credentials: 'include',
         body: JSON.stringify({
           ...orderForm,
+          amountGiven: Number(orderForm.amountGiven) || 0,
           total: calculateTotal()
         })
       });
@@ -363,6 +425,7 @@ function Orders() {
           placedAt: data.data.placedAt,
           status: data.data.status,
           total: data.data.total,
+          amountGiven: data.data.amountGiven || 0,
           items: data.data.items.map(item => ({
             product: item.description || item.sku,
             quantity: item.quantity,
@@ -370,14 +433,13 @@ function Orders() {
           })),
           notes: data.data.customerEmail || ''
         }]);
+        setStatusCounts(prevCounts => ({
+          ...prevCounts,
+          [data.data.status]: (prevCounts[data.data.status] || 0) + 1
+        }));
         setShowAddModal(false);
-        setOrderForm({
-          orderNumber: '',
-          customerName: '',
-          customerEmail: '',
-          items: [],
-          notes: ''
-        });
+        setOrderForm(DEFAULT_ORDER_FORM);
+        localStorage.removeItem('orderFormData');
         showNotification('Order created successfully!');
       } else {
         showNotification('Failed to create order: ' + data.message, 'error');
@@ -389,12 +451,27 @@ function Orders() {
   };
 
   const totalOrders = orders.length;
+  const orderTotal = calculateTotal();
+  const amountGivenValue = Number(orderForm.amountGiven) || 0;
+  const paymentBalance = amountGivenValue - orderTotal;
 
   return (
     <div className="orders-page">
       <SidebarMenu active="orders" />
       
       <div className="orders-main-content">
+        <div className="page-back-bar">
+          <button
+            type="button"
+            className="page-back-btn"
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/dashboard'))}
+            aria-label="Go back"
+          >
+            <ArrowLeft size={18} />
+            Back
+          </button>
+        </div>
+
         {/* Header */}
         <div className="orders-header">
           <div className="orders-header-content">
@@ -409,7 +486,7 @@ function Orders() {
                   Order Placed in Lab: {statusCounts['Order Placed in Lab'] || 0}
                 </span>
                 <span className="stat-badge" style={{ backgroundColor: '#FFF7ED', color: '#92400E' }}>
-                  In Lab Processing: {statusCounts['In Lab Processing'] || 0}
+                  Lab Processing: {statusCounts['In Lab Processing'] || 0}
                 </span>
                 <span className="stat-badge" style={{ backgroundColor: '#F3E8FF', color: '#6D28D9' }}>
                   Transit to Shop: {statusCounts['Transit to Shop'] || 0}
@@ -423,7 +500,7 @@ function Orders() {
               </div>
             </div>
             <div className="orders-header-actions">
-              <button className="add-order-btn" onClick={() => setShowAddModal(true)}>
+              <button className="add-order-btn" onClick={openAddOrderModal}>
                 <Plus size={16} />
                 Add Order
               </button>
@@ -491,6 +568,7 @@ function Orders() {
                     <th>Date</th>
                     <th>Items</th>
                     <th>Total</th>
+                    <th>Due Balance</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -498,6 +576,7 @@ function Orders() {
                 <tbody>
                   {filteredOrders.map(order => {
                     const statusStyle = getStatusBadge(order.status);
+                    const dueBalance = getDueBalance(order);
                     return (
                       <tr key={order._id}>
                         <td>
@@ -518,13 +597,22 @@ function Orders() {
                         </td>
                         <td>
                           <span
+                            className={`due-balance ${
+                              dueBalance > 0 ? 'due-balance-pending' : 'due-balance-settled'
+                            }`}
+                          >
+                            Rs. {dueBalance.toLocaleString()}
+                          </span>
+                        </td>
+                        <td>
+                          <span
                             className="status-badge"
                             style={{
                               backgroundColor: statusStyle.bg,
                               color: statusStyle.color
                             }}
                           >
-                            {order.status}
+                            {getStatusLabel(order.status)}
                           </span>
                         </td>
                         <td>
@@ -594,7 +682,7 @@ function Orders() {
                           className="status-badge"
                           style={getStatusBadge(selectedOrder.status)}
                         >
-                          {selectedOrder.status}
+                          {getStatusLabel(selectedOrder.status)}
                         </span>
                       </div>
                     </div>
@@ -774,7 +862,7 @@ function Orders() {
                         type="text"
                         className="form-input"
                         value={orderForm.customerName}
-                        onChange={(e) => setOrderForm({...orderForm, customerName: e.target.value})}
+                        onChange={(e) => setOrderForm({ ...orderForm, customerName: e.target.value, customerId: '' })}
                         placeholder="Enter customer name"
                         required
                       />
@@ -788,7 +876,7 @@ function Orders() {
                         type="email"
                         className="form-input"
                         value={orderForm.customerEmail}
-                        onChange={(e) => setOrderForm({...orderForm, customerEmail: e.target.value})}
+                        onChange={(e) => setOrderForm({ ...orderForm, customerEmail: e.target.value, customerId: '' })}
                         placeholder="Enter customer email"
                       />
                     </div>
@@ -857,7 +945,8 @@ function Orders() {
                                 onClick={() => handleRemoveItem(index)}
                                 title="Remove item"
                               >
-                                <Minus size={14} />
+                                <Trash2 size={16} />
+                                <span>Remove</span>
                               </button>
                             </td>
                           </tr>
@@ -875,6 +964,76 @@ function Orders() {
                     </table>
                   </div>
                 )}
+
+                {/* Payment */}
+                <div className="order-detail-section">
+                  <h4>Payment</h4>
+                  <div className="payment-summary">
+                    <div className="payment-summary-row">
+                      <span>Total Amount</span>
+                      <strong>Rs. {orderTotal.toLocaleString()}</strong>
+                    </div>
+
+                    <div className="payment-input-group">
+                      <label className="form-label" htmlFor="amount-given">
+                        Amount Customer Gives
+                      </label>
+                      <input
+                        id="amount-given"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="form-input"
+                        value={orderForm.amountGiven}
+                        onChange={(e) =>
+                          setOrderForm({ ...orderForm, amountGiven: e.target.value })
+                        }
+                        placeholder="Enter amount received"
+                      />
+                    </div>
+
+                    {amountGivenValue > 0 && (
+                      <div className="payment-summary-row">
+                        <span>
+                          {paymentBalance >= 0 ? 'Change to Return' : 'Balance Due'}
+                        </span>
+                        <strong
+                          className={
+                            paymentBalance >= 0
+                              ? 'payment-change'
+                              : 'payment-balance-due'
+                          }
+                        >
+                          Rs. {Math.abs(paymentBalance).toLocaleString()}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Update Status */}
+                <div className="order-detail-section">
+                  <h4>Update Status</h4>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="order-status">
+                      Status
+                    </label>
+                    <select
+                      id="order-status"
+                      className="form-select"
+                      value={orderForm.status || 'Order Received'}
+                      onChange={(e) =>
+                        setOrderForm({ ...orderForm, status: e.target.value })
+                      }
+                    >
+                      {ADD_ORDER_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div className="modal-footer">

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Box,
   Card,
@@ -57,7 +57,6 @@ const Staff = () => {
   // State for data grid
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
-  const [sort, setSort] = useState({});
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
 
@@ -89,17 +88,48 @@ const Staff = () => {
   const { data, isLoading, refetch } = useGetStaffQuery({
     page,
     pageSize,
-    sort: JSON.stringify(sort),
-    search,
   });
+
+  // Search is applied client-side so results filter instantly across the
+  // whole staff directory as the admin types.
+  const staffRows = useMemo(() => {
+    const rows = Array.isArray(data?.staff) ? data.staff : [];
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+
+    return rows.filter((member) =>
+      [
+        member.staffId,
+        member.name,
+        member.email,
+        member.role,
+        member.status,
+        member.department,
+        member.phoneNumber,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term))
+    );
+  }, [data, search]);
 
   const [createStaff] = useCreateStaffMutation();
   const [updateStaff] = useUpdateStaffMutation();
   const [deleteStaff] = useDeleteStaffMutation();
 
+  // Build the role list from the roles that actually exist in the database,
+  // while keeping the standard staff roles available for new members.
+  const roleOptions = useMemo(() => {
+    const baseRoles = ["Admin", "Manager", "Supervisor", "Employee"];
+    const databaseRoles = staffRows
+      .map((member) => member.role)
+      .filter((role) => role && !baseRoles.includes(role));
+
+    return [...baseRoles, ...Array.from(new Set(databaseRoles))];
+  }, [staffRows]);
+
   // Handle search
   const handleSearch = () => {
-    setSearch(searchInput);
+    setSearch(searchInput.trim());
     setPage(0);
   };
 
@@ -114,9 +144,17 @@ const Staff = () => {
     e.preventDefault();
     try {
       if (openAddModal) {
-        // Do not send password on create; backend assigns default
-        const { password, ...payload } = formData;
-        await createStaff(payload).unwrap();
+        if (!formData.password || formData.password.length < 8) {
+          setNotification({
+            open: true,
+            message: "Password must be at least 8 characters",
+            severity: "error",
+          });
+          return;
+        }
+        // The staff directory is backed by real user accounts, so a password
+        // is required when creating a new staff member.
+        await createStaff(formData).unwrap();
         setNotification({
           open: true,
           message: "Staff member created successfully!",
@@ -305,17 +343,26 @@ const Staff = () => {
         <Box>
           <IconButton
             onClick={() => handleOpenEditModal(params.row)}
-            color="primary"
             size="small"
+            title="Edit staff member"
+            aria-label="Edit staff member"
+            sx={{
+              mr: 0.5,
+              backgroundColor: theme.palette.secondary[300],
+              color: theme.palette.primary[600],
+              "&:hover": { backgroundColor: theme.palette.secondary[400] },
+            }}
           >
-            <Edit />
+            <Edit fontSize="small" />
           </IconButton>
           <IconButton
             onClick={() => handleOpenDeleteModal(params.row)}
             color="error"
             size="small"
+            title="Delete staff member"
+            aria-label="Delete staff member"
           >
-            <Delete />
+            <Delete fontSize="small" />
           </IconButton>
         </Box>
       ),
@@ -340,7 +387,11 @@ const Staff = () => {
             label="Search staff..."
             variant="outlined"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             onKeyPress={handleKeyPress}
             size="small"
             sx={{ minWidth: "300px" }}
@@ -401,18 +452,15 @@ const Staff = () => {
         <DataGrid
           loading={isLoading || !data}
           getRowId={(row) => row._id}
-          rows={(data && data.staff) || []}
+          rows={staffRows}
           columns={columns}
-          rowCount={(data && data.total) || 0}
+          rowCount={staffRows.length}
           rowsPerPageOptions={[20, 50, 100]}
           pagination
           page={page}
           pageSize={pageSize}
-          paginationMode="server"
-          sortingMode="server"
           onPageChange={(newPage) => setPage(newPage)}
           onPageSizeChange={(newPageSize) => setPageSize(newPageSize)}
-          onSortModelChange={(newSortModel) => setSort(...newSortModel)}
         />
       </Box>
 
@@ -466,25 +514,34 @@ const Staff = () => {
                 />
               </Grid>
 
-              {openEditModal && (
-                <Grid item xs={12}>
-                  <TextField
-                    name="password"
-                    label="New Password (leave blank to keep current)"
-                    type="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    fullWidth
-                    size="small"
-                    autoComplete="new-password"
-                    InputProps={{ startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock />
-                      </InputAdornment>
-                    )}}
-                  />
-                </Grid>
-              )}
+              <Grid item xs={12}>
+                <TextField
+                  name="password"
+                  label={
+                    openAddModal
+                      ? "Password"
+                      : "New Password (leave blank to keep current)"
+                  }
+                  type="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required={openAddModal}
+                  fullWidth
+                  size="small"
+                  autoComplete="new-password"
+                  inputProps={{ minLength: 8 }}
+                  helperText={
+                    openAddModal
+                      ? "At least 8 characters. This is the staff member's login password."
+                      : "Only fill this in to change the password."
+                  }
+                  InputProps={{ startAdornment: (
+                    <InputAdornment position="start">
+                      <Lock />
+                    </InputAdornment>
+                  )}}
+                />
+              </Grid>
 
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth size="small">
@@ -495,10 +552,11 @@ const Staff = () => {
                     onChange={handleInputChange}
                     label="Role"
                   >
-                    <MenuItem value="Admin">Admin</MenuItem>
-                    <MenuItem value="Manager">Manager</MenuItem>
-                    <MenuItem value="Supervisor">Supervisor</MenuItem>
-                    <MenuItem value="Employee">Employee</MenuItem>
+                    {roleOptions.map((role) => (
+                      <MenuItem key={role} value={role}>
+                        {role}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>

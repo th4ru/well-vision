@@ -26,6 +26,7 @@ import {
   TrendingUpOutlined,
   PieChartOutlined,
   PeopleOutlined,
+  SettingsOutlined,
 } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -91,6 +92,10 @@ const navItems = [
     text: "Performance",
     icon: <TrendingUpOutlined />,
   },
+  {
+    text: "Configuration",
+    icon: <SettingsOutlined />,
+  },
 ];
 
 const Sidebar = ({
@@ -132,24 +137,71 @@ const Sidebar = ({
           }}
         >
           <Box width="100%">
-            <Box m="1.5rem 2rem 2rem 3rem">
-              <Box 
-                display="flex" 
-                justifyContent="space-between" 
-                alignItems="center"
-                color={theme.palette.secondary.main}
-              >
-                <Box display="flex" alignItems="center" gap="0.5rem">
-                  <Typography variant="h4" fontWeight="bold">
-                    ECOMVISION
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+              gap="0.5rem"
+              sx={{
+                px: "1.5rem",
+                py: "1.25rem",
+                borderBottom: `1px solid ${
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.12)"
+                    : "rgba(0, 0, 0, 0.08)"
+                }`,
+              }}
+            >
+              <Box display="flex" alignItems="center" gap="0.75rem" minWidth={0}>
+                <Box
+                  component="img"
+                  src={
+                    theme.palette.mode === "dark"
+                      ? "/Logo White.png"
+                      : "/Logo Black.png"
+                  }
+                  alt="Well Vision Logo"
+                  sx={{
+                    width: 46,
+                    height: 46,
+                    objectFit: "contain",
+                    flexShrink: 0,
+                  }}
+                />
+                <Box minWidth={0}>
+                  <Typography
+                    variant="h4"
+                    fontWeight="bold"
+                    sx={{
+                      color:
+                        theme.palette.mode === "dark" ? "#ffffff" : "#191F45",
+                      lineHeight: 1.15,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Well Vision
+                  </Typography>
+                  <Typography
+                    sx={{
+                      mt: "2px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                      textTransform: "uppercase",
+                      color:
+                        theme.palette.mode === "dark" ? "#99f6e4" : "#0d9488",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    Spectacle Shop System
                   </Typography>
                 </Box>
-                {!isNonMobile && (
-                  <IconButton onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-                    <ChevronLeft />
-                  </IconButton>
-                )}
               </Box>
+              {!isNonMobile && (
+                <IconButton onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+                  <ChevronLeft />
+                </IconButton>
+              )}
             </Box>
             <List>
               {navItems.map(({ text, icon }) => {

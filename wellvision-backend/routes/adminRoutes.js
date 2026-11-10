@@ -5,6 +5,27 @@ import bcrypt from 'bcryptjs';
 import userModel from '../models/userModel.js';
 import userAuth from '../middleware/userAuth.js';
 import adminOnly from '../middleware/adminOnly.js';
+import {
+  createAdminProduct,
+  getAdminCustomers,
+  getAdminProducts,
+  getAdminTransactions,
+  getCurrentUser,
+  getDashboard,
+  getSales,
+  getStaffPerformance,
+  updateAdminProduct,
+  updateCurrentUser,
+} from '../controllers/dashboardController.js';
+import {
+  createStaff,
+  deleteStaff,
+  getStaff,
+  getStaffById,
+  lookupStaffAccess,
+  updateStaff,
+  updateStaffAccess,
+} from '../controllers/staffController.js';
 
 const router = express.Router();
 
@@ -25,6 +46,38 @@ const toAdminResponse = (user) => ({
 const adminFilter = {
   $or: [{ role: { $regex: '^admin$', $options: 'i' } }, { email: 'admin@example.com' }],
 };
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard / sales / products data
+|--------------------------------------------------------------------------
+| These endpoints feed the admin dashboard and the client-facing admin pages.
+*/
+router.get('/general/dashboard', userAuth, adminOnly, getDashboard);
+router.get('/general/me', userAuth, getCurrentUser);
+router.put('/general/me', userAuth, updateCurrentUser);
+router.get('/sales/sales', userAuth, adminOnly, getSales);
+router.get('/management/performance', userAuth, adminOnly, getStaffPerformance);
+router.get('/client/customers', userAuth, adminOnly, getAdminCustomers);
+router.get('/client/products', userAuth, adminOnly, getAdminProducts);
+router.post('/client/products', userAuth, adminOnly, createAdminProduct);
+router.put('/client/products/:id', userAuth, adminOnly, updateAdminProduct);
+router.get('/client/transactions', userAuth, adminOnly, getAdminTransactions);
+
+/*
+|--------------------------------------------------------------------------
+| Staff directory + access configuration
+|--------------------------------------------------------------------------
+| The Staff page and the Configuration page both use these endpoints. Every
+| route is restricted to admins.
+*/
+router.get('/staff', userAuth, adminOnly, getStaff);
+router.post('/staff/lookup', userAuth, adminOnly, lookupStaffAccess);
+router.post('/staff', userAuth, adminOnly, createStaff);
+router.get('/staff/:id', userAuth, adminOnly, getStaffById);
+router.put('/staff/:id/access', userAuth, adminOnly, updateStaffAccess);
+router.put('/staff/:id', userAuth, adminOnly, updateStaff);
+router.delete('/staff/:id', userAuth, adminOnly, deleteStaff);
 
 /*
 |--------------------------------------------------------------------------

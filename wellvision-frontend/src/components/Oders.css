@@ -452,6 +452,19 @@
   text-align: center;
 }
 
+.due-balance {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.due-balance-pending {
+  color: #b91c1c;
+}
+
+.due-balance-settled {
+  color: #047857;
+}
+
 .table-actions {
   display: flex;
   gap: 8px;
@@ -864,7 +877,7 @@
   }
 
   .orders-table {
-    min-width: 600px;
+    min-width: 860px;
   }
 
   .modal-content.order-modal {
@@ -921,8 +934,63 @@
 }
 
 /* Add Order Modal Styles */
-.add-order-modal {
-  max-width: 900px;
+.modal-content.add-order-modal {
+  max-width: 1100px;
+  width: 100%;
+}
+
+.add-order-modal .modal-body {
+  padding: 28px 32px;
+}
+
+.add-order-modal .items-table th,
+.add-order-modal .items-table td {
+  padding: 14px 16px;
+}
+
+.add-order-modal .items-table td:last-child,
+.add-order-modal .items-table th:last-child {
+  width: 130px;
+  text-align: center;
+}
+
+.payment-summary {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+
+.payment-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.payment-summary-row + .payment-summary-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #d1d5db;
+}
+
+.payment-summary-row strong {
+  font-size: 16px;
+  color: #0f766e;
+}
+
+.payment-summary-row .payment-balance-due {
+  color: #b91c1c;
+}
+
+.payment-input-group {
+  margin: 16px 0 4px;
+}
+
+.payment-input-group .form-label {
+  margin-bottom: 8px;
 }
 
 .form-grid {
@@ -983,20 +1051,31 @@
 }
 
 .remove-item-btn {
-  background-color: #fee2e2;
-  color: #ef4444;
-  border: none;
-  border-radius: 4px;
-  padding: 6px;
+  background-color: #dc2626;
+  color: #ffffff;
+  border: 1px solid #dc2626;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.25);
 }
 
 .remove-item-btn:hover {
-  background-color: #fecaca;
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35);
+}
+
+.remove-item-btn:active {
+  transform: translateY(1px);
 }
 
 /* Add Order Button */
